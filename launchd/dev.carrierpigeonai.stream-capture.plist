@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Starts Stream Capture at login and restarts it if it dies.
+     Install: cp launchd/*.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.carrierpigeonai.stream-capture.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>dev.carrierpigeonai.stream-capture</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/andrew/Developer/stream-capture/app.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/andrew/Developer/stream-capture</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/Users/andrew/Library/Python/3.9/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <!-- Recorders run in their own session; don't kill them when the server restarts. -->
+  <key>AbandonProcessGroup</key><true/>
+  <key>StandardOutPath</key><string>/Users/andrew/Library/Logs/stream-capture.log</string>
+  <key>StandardErrorPath</key><string>/Users/andrew/Library/Logs/stream-capture.log</string>
+</dict>
+</plist>
