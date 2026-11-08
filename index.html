@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream Capture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f3ef; --panel: #ffffff; --ink: #1b1b19; --muted: #6d6b64; --line: #e3e1da;
+    --accent: #e5484d; --accent-ink: #fff; --ok: #2f8f5b; --warn: #b7791f; --chip: #efede7;
+    --focus: #1b1b19;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121211; --panel: #1b1b1a; --ink: #ecebe6; --muted: #9a988f; --line: #2c2b29;
+      --accent: #ff5c61; --accent-ink: #160707; --ok: #5cc48a; --warn: #e0a84a; --chip: #252422;
+      --focus: #ecebe6;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Schibsted Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 900px; margin: 0 auto; padding: 48px 20px 80px; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0; display: flex; align-items: center; gap: 10px; }
+  h1 .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .sub { color: var(--muted); margin: 6px 0 28px; max-width: 60ch; }
+  form { display: flex; gap: 8px; margin-bottom: 8px; }
+  input[type=url], input[type=search] { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button, .btn { font: inherit; font-weight: 500; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  button:hover, .btn:hover { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; padding: 12px 18px; }
+  .msg { min-height: 22px; font-size: 14px; color: var(--accent); margin-bottom: 18px; }
+  .jobs { display: grid; gap: 16px; }
+  .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; padding: 32px; text-align: center; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .head { display: grid; grid-template-columns: 168px 1fr; gap: 16px; padding: 16px; }
+  .thumb { width: 168px; aspect-ratio: 16/9; border-radius: 8px; object-fit: cover; background: var(--chip); }
+  .title { font-weight: 600; font-size: 16px; line-height: 1.35; margin: 0 0 6px; overflow-wrap: anywhere; }
+  .title a { color: inherit; text-decoration: none; } .title a:hover { text-decoration: underline; }
+  .status { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13.5px; color: var(--muted); margin-bottom: 12px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 9px; border-radius: 99px; background: var(--chip); color: var(--ink); }
+  .pill.recording { color: var(--accent); } .pill.complete { color: var(--ok); } .pill.stopped { color: var(--warn); }
+  .pill.recording::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .pill.recording::before { animation: none; } }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .err { color: var(--accent); font-size: 13.5px; margin-top: 8px; overflow-wrap: anywhere; }
+  .note { color: var(--warn); font-size: 13.5px; margin-top: 8px; }
+  .tx { border-top: 1px solid var(--line); }
+  .tx-bar { display: flex; gap: 8px; padding: 12px 16px; align-items: center; flex-wrap: wrap; }
+  .tx-bar input { padding: 8px 12px; }
+  .tx-info { font-size: 13px; color: var(--muted); padding: 0 16px 8px; }
+  .lines { max-height: 460px; overflow-y: auto; padding: 4px 16px 16px; }
+  .line { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 4px 0; }
+  .line .t { font: 12.5px/1.9 "JetBrains Mono", ui-monospace, monospace; color: var(--muted); }
+  .line mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 3px; }
+  .working { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  details { margin-top: 40px; color: var(--muted); font-size: 14px; }
+  summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+  details ol { padding-left: 20px; } details li { margin: 6px 0; }
+  code { font: 12.5px "JetBrains Mono", ui-monospace, monospace; background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+  @media (max-width: 560px) {
+    main { padding: 28px 16px 60px; }
+    form { flex-direction: column; }
+    .head { grid-template-columns: 1fr; }
+    .thumb { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="dot" aria-hidden="true"></span>Stream Capture</h1>
+  <p class="sub">Record a YouTube stream from its first minute, then turn it into a searchable transcript on this Mac. It works while the stream is still live.</p>
+
+  <form id="new">
+    <input id="url" type="url" required aria-label="Video URL" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off">
+    <button class="primary" id="go" type="submit">Start recording</button>
+  </form>
+  <div class="msg" id="msg" role="status"></div>
+
+  <section class="jobs" id="jobs" aria-live="polite"></section>
+
+  <details>
+    <summary>How it works</summary>
+    <ol>
+      <li><b>Record.</b> <code>yt-dlp --live-from-start</code> rewinds to the stream's first minute, pulls it down in 5-second chunks, then keeps up with the live edge until the stream ends or you hit Stop. Only the audio is saved.</li>
+      <li><b>Snapshot.</b> While recording, the file on disk is still being written. "Transcribe" uses <code>ffmpeg</code> to copy everything captured so far into a clean file, without interrupting the recording.</li>
+      <li><b>Transcribe.</b> <code>mlx_whisper</code> runs Whisper large-v3-turbo on your Mac's GPU. Lines show up as they finish. The first run downloads the model (about 1.6 GB).</li>
+      <li><b>Keep it.</b> Everything stays in <code>stream-capture/jobs/&lt;video-id&gt;/</code>, including your copy of the ending they plan to cut.</li>
+    </ol>
+  </details>
+</main>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clock = sec => {
+  if (sec == null) return "–";
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+};
+const ago = ts => {
+  const m = Math.round((Date.now() / 1000 - ts) / 60);
+  return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago";
+};
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || r.statusText);
+  return body;
+}
+const say = t => { $("#msg").textContent = t || ""; };
+
+$("#new").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = $("#go");
+  btn.disabled = true; btn.textContent = "Looking it up…"; say("");
+  try {
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ url: $("#url").value }) });
+    $("#url").value = "";
+    refresh();
+  } catch (err) { say(err.message); }
+  btn.disabled = false; btn.textContent = "Start recording";
+});
+
+const open = new Set();       // job ids with the transcript panel open
+const txState = {};           // id -> {segments, key}
+
+function headHTML(j) {
+  const label = { recording: "Recording", complete: "Saved", stopped: "Stopped", empty: "Starting" }[j.state];
+  const behind = j.has_transcript && j.captured_seconds && j.transcribed_seconds != null
+    ? j.captured_seconds - j.transcribed_seconds : 0;
+  const bits = [`<span class="pill ${j.state}">${label}</span>`,
+    `<span>${clock(j.captured_seconds)} captured</span>`];
+  if (j.has_transcript) bits.push(`<span>Transcript covers ${clock(j.transcribed_seconds)} · ${ago(j.transcribed_at)}</span>`);
+  if (j.transcribing) bits.push(`<span>Transcribing…</span>`);
+  const txLabel = j.transcribing ? "Transcribing…" : j.has_transcript ? "Update transcript" : "Transcribe now";
+  return `
+      <p class="title"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></p>
+      <div class="status">${bits.join("")}</div>
+      <div class="actions">
+        <button data-act="transcribe" ${j.transcribing || !j.captured_seconds ? "disabled" : ""}>${txLabel}</button>
+        ${j.has_transcript || j.transcribing ? `<button data-act="toggle">${open.has(j.id) ? "Hide transcript" : "Show transcript"}</button>` : ""}
+        ${j.state === "recording" ? `<button data-act="stop">Stop recording</button>` : ""}
+        ${j.state === "stopped" ? `<button data-act="resume">Resume recording</button>` : ""}
+      </div>
+      ${j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
+      ${j.transcribe_error && !j.transcribing ? `<div class="err">Transcription failed: ${esc(j.transcribe_error)}</div>` : ""}
+      ${behind > 120 && !j.transcribing ? `<div class="note">${clock(behind)} recorded since the last transcript.</div>` : ""}`;
+}
+
+function card(j) {
+  let el = document.getElementById("job-" + j.id);
+  if (!el) {
+    el = document.createElement("article");
+    el.className = "card"; el.id = "job-" + j.id;
+    el.innerHTML = `<div class="head"><img class="thumb" src="https://i.ytimg.com/vi/${esc(j.id)}/mqdefault.jpg" alt=""><div class="info"></div></div>`;
+    el.addEventListener("click", e => act(j.id, e.target.closest("button")?.dataset.act));
+  }
+  const html = headHTML(j);
+  if (el._html !== html) { $(".info", el).innerHTML = html; el._html = html; }
+  el._job = j;
+  return el;
+}
+
+async function act(id, what) {
+  if (!what) return;
+  const el = document.getElementById("job-" + id);
+  say("");
+  try {
+    if (what === "toggle") {
+      open.has(id) ? open.delete(id) : open.add(id);
+    } else {
+      if (what === "stop" && !confirm("Stop recording? You can resume it later.")) return;
+      await api(`/api/jobs/${id}/${what}`, { method: "POST" });
+      if (what === "transcribe") open.add(id);
+    }
+  } catch (err) { say(err.message); }
+  await refresh();
+  el && el.scrollIntoView({ block: "nearest" });
+}
+
+function renderTx(el, j) {
+  let tx = $(".tx", el);
+  if (!open.has(j.id) || !(j.has_transcript || j.transcribing)) { tx && tx.remove(); return; }
+  if (!tx) {
+    tx = document.createElement("div");
+    tx.className = "tx";
+    tx.innerHTML = `
+      <div class="tx-bar">
+        <input type="search" placeholder="Search transcript" aria-label="Search transcript">
+        <button data-copy>Copy text</button>
+        <a class="btn" data-dl="txt">.txt</a>
+        <a class="btn" data-dl="srt">.srt</a>
+      </div>
+      <div class="tx-info"></div>
+      <div class="lines"></div>`;
+    $("input", tx).addEventListener("input", () => drawLines(tx, j.id));
+    $("[data-copy]", tx).addEventListener("click", async e => {
+      e.stopPropagation();
+      const segs = txState[j.id]?.segments || [];
+      await navigator.clipboard.writeText(segs.map(s => `[${s.t}] ${s.text}`).join("\n"));
+      e.target.textContent = "Copied"; setTimeout(() => (e.target.textContent = "Copy text"), 1500);
+    });
+    tx.querySelectorAll("[data-dl]").forEach(a => (a.href = `/api/jobs/${j.id}/download/${a.dataset.dl}`));
+    el.appendChild(tx);
+  }
+  tx.querySelectorAll("[data-dl]").forEach(a => (a.hidden = !j.has_transcript || j.transcribing));
+  loadTx(tx, j);
+}
+
+async function loadTx(tx, j) {
+  const key = j.transcribing ? "live:" + Date.now() : "done:" + j.transcribed_at;
+  if (txState[j.id]?.key === key) return;
+  const data = await api(`/api/jobs/${j.id}/transcript`).catch(() => null);
+  if (!data) return;
+  const lines = $(".lines", tx);
+  const atBottom = lines.scrollHeight - lines.scrollTop - lines.clientHeight < 40;
+  txState[j.id] = { segments: data.segments, key };
+  $(".tx-info", tx).textContent = j.transcribing
+    ? (data.segments.length ? `${data.segments.length} lines so far, up to ${data.segments.at(-1).t}` : "Starting Whisper. The first run downloads the model, so give it a minute.")
+    : `${data.segments.length} lines`;
+  drawLines(tx, j.id);
+  if (j.transcribing && atBottom) lines.scrollTop = lines.scrollHeight;
+}
+
+function drawLines(tx, id) {
+  const q = $("input", tx).value.trim().toLowerCase();
+  const segs = (txState[id]?.segments || []).filter(s => !q || s.text.toLowerCase().includes(q));
+  const hl = t => {
+    if (!q) return esc(t);
+    const i = t.toLowerCase().indexOf(q);
+    return esc(t.slice(0, i)) + "<mark>" + esc(t.slice(i, i + q.length)) + "</mark>" + esc(t.slice(i + q.length));
+  };
+  $(".lines", tx).innerHTML = segs.length
+    ? segs.map(s => `<div class="line"><span class="t">${esc(s.t)}</span><span>${hl(s.text)}</span></div>`).join("")
+    : `<div class="working">${q ? "No matches." : "Waiting for the first lines…"}</div>`;
+}
+
+let busy = false;
+async function refresh() {
+  if (busy) return; busy = true;
+  try {
+    const { jobs } = await api("/api/jobs");
+    const list = $("#jobs");
+    if (!jobs.length) list.innerHTML = `<div class="empty">Paste a stream link above to start your first recording.</div>`;
+    else {
+      list.querySelector(".empty")?.remove();
+      jobs.forEach((j, i) => {
+        const el = card(j);
+        if (list.children[i] !== el) list.insertBefore(el, list.children[i] || null);
+        renderTx(el, j);
+      });
+    }
+  } catch (err) { say("Can't reach the app. Is app.py still running?"); }
+  busy = false;
+}
+refresh();
+setInterval(refresh, 2500);
+</script>
+</body>
+</html>
