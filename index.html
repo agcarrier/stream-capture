@@ -56,6 +56,15 @@
   .err { color: var(--accent); font-size: 13.5px; margin-top: 8px; overflow-wrap: anywhere; }
   .note { color: var(--warn); font-size: 13.5px; margin-top: 8px; }
   .tx { border-top: 1px solid var(--line); }
+  .sum { padding: 16px 16px 4px; border-bottom: 1px solid var(--line); max-width: 72ch; }
+  .sum h3 { font-size: 16px; margin: 0 0 6px; }
+  .sum h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 6px; }
+  .sum p { margin: 0 0 8px; }
+  .sum ol, .sum ul { margin: 0 0 12px; padding: 0; list-style: none; }
+  .sum ol li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 4px 0; }
+  .sum ul li { padding: 3px 0; }
+  .sum .t, .line .t { font: 12.5px/1.9 "JetBrains Mono", ui-monospace, monospace; color: var(--muted); text-decoration: none; }
+  .sum a.t:hover { color: var(--accent); text-decoration: underline; }
   .tx-bar { display: flex; gap: 8px; padding: 12px 16px; align-items: center; flex-wrap: wrap; }
   .tx-bar input { padding: 8px 12px; flex: 1 1 180px; }
   .tx-info { font-size: 13px; color: var(--muted); padding: 0 16px 8px; }
@@ -147,18 +156,22 @@ function headHTML(j) {
     `<span>${clock(j.captured_seconds)} captured</span>`];
   if (j.has_transcript) bits.push(`<span>Transcript covers ${clock(j.transcribed_seconds)} · ${ago(j.transcribed_at)}</span>`);
   if (j.transcribing) bits.push(`<span>Transcribing…</span>`);
+  if (j.summarizing) bits.push(`<span>Summarizing…</span>`);
+  const sumLabel = j.summarizing ? "Summarizing…" : j.summary_at ? "Update summary" : "Summarize";
   const txLabel = j.transcribing ? "Transcribing…" : j.has_transcript ? "Update transcript" : "Transcribe now";
   return `
       <p class="title"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></p>
       <div class="status">${bits.join("")}</div>
       <div class="actions">
         <button data-act="transcribe" ${j.transcribing || !j.captured_seconds ? "disabled" : ""}>${txLabel}</button>
+        ${j.has_transcript ? `<button data-act="summarize" ${j.summarizing || j.transcribing ? "disabled" : ""}>${sumLabel}</button>` : ""}
         ${j.has_transcript || j.transcribing ? `<button data-act="toggle">${open.has(j.id) ? "Hide transcript" : "Show transcript"}</button>` : ""}
         ${j.state === "recording" ? `<button data-act="stop">Stop recording</button>` : ""}
         ${j.state === "stopped" ? `<button data-act="resume">Resume recording</button>` : ""}
       </div>
       ${j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
       ${j.transcribe_error && !j.transcribing ? `<div class="err">Transcription failed: ${esc(j.transcribe_error)}</div>` : ""}
+      ${j.summary_error && !j.summarizing ? `<div class="err">Summary failed: ${esc(j.summary_error)}</div>` : ""}
       ${behind > 120 && !j.transcribing ? `<div class="note">${clock(behind)} recorded since the last transcript.</div>` : ""}`;
 }
 
@@ -186,7 +199,7 @@ async function act(id, what) {
     } else {
       if (what === "stop" && !confirm("Stop recording? You can resume it later.")) return;
       await api(`/api/jobs/${id}/${what}`, { method: "POST" });
-      if (what === "transcribe") open.add(id);
+      if (what === "transcribe" || what === "summarize") open.add(id);
     }
   } catch (err) { say(err.message); }
   await refresh();
@@ -200,6 +213,7 @@ function renderTx(el, j) {
     tx = document.createElement("div");
     tx.className = "tx";
     tx.innerHTML = `
+      <section class="sum" hidden></section>
       <div class="tx-bar">
         <input type="search" placeholder="Search transcript" aria-label="Search transcript">
         <button data-copy>Copy text</button>
@@ -220,6 +234,31 @@ function renderTx(el, j) {
   }
   tx.querySelectorAll("[data-dl]").forEach(a => (a.hidden = !j.has_transcript || j.transcribing));
   loadTx(tx, j);
+  loadSummary(tx, j);
+}
+
+// A transcript time as a link that opens the video there (YouTube only).
+function timeLink(j, secs, label) {
+  if (secs == null || !/youtube\.com|youtu\.be/.test(j.url || "")) return `<span class="t">${esc(label)}</span>`;
+  return `<a class="t" href="https://www.youtube.com/watch?v=${encodeURIComponent(j.id)}&t=${secs}s" target="_blank" rel="noopener" title="Open the video here">${esc(label)}</a>`;
+}
+
+async function loadSummary(tx, j) {
+  const box = $(".sum", tx);
+  if (!j.summary_at) { box.hidden = true; return; }
+  if (box._at === j.summary_at) return;
+  const s = await api(`/api/jobs/${j.id}/summary`).catch(() => null);
+  if (!s || !s.tldr) return;
+  box._at = j.summary_at;
+  const stale = j.transcribed_seconds - s.covers_seconds > 120
+    ? `<p class="note">Written when the transcript covered ${clock(s.covers_seconds)}. Update it to include the rest.</p>` : "";
+  box.innerHTML = `
+    <h3>Summary</h3>${stale}
+    <p>${esc(s.tldr)}</p>
+    <h4>Key points</h4>
+    <ol>${s.key_points.map(p => `<li>${timeLink(j, p.s, p.timestamp)}<span>${esc(p.text)}</span></li>`).join("")}</ol>
+    ${s.mentions.length ? `<h4>Mentioned</h4><ul>${s.mentions.map(m => `<li><strong>${esc(m.name)}</strong>: ${esc(m.note)}</li>`).join("")}</ul>` : ""}`;
+  box.hidden = false;
 }
 
 async function loadTx(tx, j) {
@@ -246,12 +285,8 @@ function drawLines(tx, id) {
     return esc(t.slice(0, i)) + "<mark>" + esc(t.slice(i, i + q.length)) + "</mark>" + esc(t.slice(i + q.length));
   };
   const j = document.getElementById("job-" + id)?._job || {};
-  const yt = /youtube\.com|youtu\.be/.test(j.url || "");
-  const t = s => yt
-    ? `<a class="t" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}&t=${s.s}s" target="_blank" rel="noopener" title="Open the video here">${esc(s.t)}</a>`
-    : `<span class="t">${esc(s.t)}</span>`;
   $(".lines", tx).innerHTML = segs.length
-    ? segs.map(s => `<div class="line">${t(s)}<span>${hl(s.text)}</span></div>`).join("")
+    ? segs.map(s => `<div class="line">${timeLink(j, s.s, s.t)}<span>${hl(s.text)}</span></div>`).join("")
     : `<div class="working">${q ? "No matches." : "Waiting for the first lines…"}</div>`;
 }
 
