@@ -4,6 +4,8 @@
 Run:  python3 app.py   then open http://127.0.0.1:8765
 Each recording lives in jobs/<video-id>/ (audio, logs, transcript files).
 """
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -12,7 +14,9 @@ import signal
 import subprocess
 import threading
 import time
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -20,6 +24,34 @@ JOBS = ROOT / "jobs"
 JOBS.mkdir(exist_ok=True)
 PORT = int(os.environ.get("PORT", "8765"))
 MODEL = os.environ.get("WHISPER_MODEL", "mlx-community/whisper-large-v3-turbo")
+
+# The password lives outside the repo. Changing it signs every browser out.
+PASSWORD_FILE = Path(os.environ.get("PASSWORD_FILE", Path.home() / ".config/stream-capture/password"))
+COOKIE = "sc_session"
+COOKIE_DAYS = 30
+
+
+def session_token():
+    pw = PASSWORD_FILE.read_text().strip()
+    if not pw:
+        raise SystemExit("Empty password in %s" % PASSWORD_FILE)
+    return hmac.new(pw.encode(), b"stream-capture-session", hashlib.sha256).hexdigest()
+
+
+LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Stream Capture</title>
+<style>
+:root{--bg:#f4f3ef;--panel:#fff;--ink:#1b1b19;--muted:#6d6b64;--line:#e3e1da;--accent:#e5484d;--accent-ink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--panel:#1b1b1a;--ink:#ecebe6;--muted:#9a988f;--line:#2c2b29;--accent:#ff5c61;--accent-ink:#160707}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif;padding:16px}
+form{width:100%%;max-width:340px;display:grid;gap:12px}h1{font-size:22px;margin:0 0 4px}
+input,button{font:inherit;border-radius:10px;padding:12px 14px;border:1px solid var(--line)}
+input{background:var(--panel);color:var(--ink)}button{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:500;cursor:pointer}
+input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}.err{color:var(--accent);font-size:14px;margin:0}
+</style></head><body><form method="post" action="/login"><h1>Stream Capture</h1>
+<label for="pw" style="color:var(--muted)">Password</label>
+<input id="pw" name="password" type="password" autocomplete="current-password" autofocus required>
+%s<button>Sign in</button></form></body></html>"""
 
 
 def tool(name, *fallbacks):
@@ -257,8 +289,32 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def signed_in(self):
+        cookies = SimpleCookie(self.headers.get("Cookie") or "")
+        return COOKIE in cookies and hmac.compare_digest(cookies[COOKIE].value, session_token())
+
+    def login(self, method):
+        if method == "GET":
+            return self.send(200, (LOGIN_PAGE % "").encode(), "text/html; charset=utf-8")
+        length = min(int(self.headers.get("Content-Length") or 0), 4096)
+        pw = parse_qs(self.rfile.read(length).decode(errors="replace")).get("password", [""])[0]
+        if hmac.compare_digest(pw.encode(), PASSWORD_FILE.read_text().strip().encode()):
+            # Secure only through the tunnel (https); Safari drops Secure cookies on http://127.0.0.1.
+            secure = "; Secure" if self.headers.get("Cf-Connecting-Ip") else ""
+            cookie = "%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax%s" % (
+                COOKIE, session_token(), COOKIE_DAYS * 86400, secure)
+            return self.send(303, b"", "text/plain", {"Location": "/", "Set-Cookie": cookie})
+        time.sleep(1)  # ponytail: per-request delay only; add a lockout if the URL ever gets hammered
+        self.send(401, (LOGIN_PAGE % '<p class="err">Wrong password.</p>').encode(), "text/html; charset=utf-8")
+
     def route(self, method):
         parts = [p for p in self.path.split("?")[0].split("/") if p]
+        if parts == ["login"]:
+            return self.login(method)
+        if not self.signed_in():
+            if method == "GET" and not parts:
+                return self.send(303, b"", "text/plain", {"Location": "/login"})
+            return self.send(401, {"error": "Sign in first"})
         try:
             if method == "GET" and not parts:
                 return self.send(200, (ROOT / "index.html").read_bytes(), "text/html; charset=utf-8")
@@ -305,5 +361,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if not PASSWORD_FILE.exists():
+        raise SystemExit("Set a password first: put it in %s" % PASSWORD_FILE)
+    session_token()
     print("Stream Capture on http://127.0.0.1:%d" % PORT)
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

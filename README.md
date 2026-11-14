@@ -11,7 +11,12 @@ Record a YouTube stream from its first minute (even while it's still live) and t
 ```bash
 brew install yt-dlp ffmpeg
 pip3 install mlx-whisper
+mkdir -p ~/.config/stream-capture
+echo 'your-password' > ~/.config/stream-capture/password
+chmod 600 ~/.config/stream-capture/password
 ```
+
+The app asks for that password and remembers you for 30 days. Changing the file signs every browser out after a restart.
 
 ## Run
 
