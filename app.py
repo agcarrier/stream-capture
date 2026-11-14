@@ -14,6 +14,7 @@ import signal
 import subprocess
 import threading
 import time
+import urllib.request
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
@@ -73,8 +74,12 @@ WHISPER = tool("mlx_whisper", "~/Library/Python/3.9/bin/mlx_whisper")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SEG_RE = re.compile(r"^\[((?:\d+:)?\d+:\d+)\.\d+ --> [^\]]+\]\s*(.*)$")
 
+NTFY_FILE = PASSWORD_FILE.parent / "ntfy_topic"  # optional; no file, no phone pings
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://capture.andrewcarrier.dev")
+
 recorders = {}        # job id -> Popen (this server's own children)
 transcribing = set()  # job ids with a transcription in flight
+live = {}             # job id -> (offset seconds, segments kept from before) while transcribing
 _dur_cache = {}
 lock = threading.Lock()
 
@@ -128,6 +133,53 @@ def tail(path, n=40):
     except FileNotFoundError:
         return []
     return lines[-n:]
+
+
+def hms(s):
+    s = int(s)
+    h, rest = divmod(s, 3600)
+    return "%d:%02d:%02d" % (h, rest // 60, rest % 60) if h else "%02d:%02d" % (rest // 60, rest % 60)
+
+
+def stamp(s, sep):
+    ms = int(round(s * 1000))
+    return "%02d:%02d:%02d%s%03d" % (ms // 3600000, ms // 60000 % 60, ms // 1000 % 60, sep, ms % 1000)
+
+
+def load_segments(d):
+    try:
+        data = json.loads((d / "transcript" / "transcript.json").read_text())
+    except (FileNotFoundError, ValueError):
+        return []
+    return [{"start": s["start"], "end": s["end"], "text": s["text"].strip()}
+            for s in data.get("segments", []) if s["text"].strip()]
+
+
+def write_transcript(d, segs):
+    out = d / "transcript"
+    out.mkdir(exist_ok=True)
+    (out / "transcript.json").write_text(json.dumps({"segments": segs}))
+    (out / "transcript.txt").write_text("".join(s["text"] + "\n" for s in segs))
+    (out / "transcript.srt").write_text("".join(
+        "%d\n%s --> %s\n%s\n\n" % (i, stamp(s["start"], ","), stamp(s["end"], ","), s["text"])
+        for i, s in enumerate(segs, 1)))
+    (out / "transcript.vtt").write_text("WEBVTT\n\n" + "".join(
+        "%s --> %s\n%s\n\n" % (stamp(s["start"], "."), stamp(s["end"], "."), s["text"]) for s in segs))
+
+
+def notify(title, body, jid=None):
+    try:
+        topic = NTFY_FILE.read_text().strip()
+    except FileNotFoundError:
+        return
+    headers = {"Title": title}
+    if jid:
+        headers["Click"] = "%s/#job-%s" % (PUBLIC_URL, jid)
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            "https://ntfy.sh/" + topic, data=body.encode(), headers=headers), timeout=10)
+    except OSError as e:
+        print("ntfy failed:", e)
 
 
 def recording_alive(jid, meta):
@@ -200,33 +252,44 @@ def start_transcription(jid):
         transcribing.add(jid)
 
     def run():
-        src = final
+        # Only the new audio gets transcribed. The last old line is redone, since it may have
+        # been cut off mid-sentence when the previous snapshot was taken.
+        old = load_segments(d)
+        cut = old[-1]["start"] if old else 0.0
+        keep = old[:-1]
+        snap = d / "snapshot.wav"
+        chunk = d / "chunk.json"
+        title = read_meta(d).get("title") or jid
         try:
-            if not src:
-                # Copy what's on disk so far into a playable file; the recorder keeps writing.
-                src = d / ("snapshot" + Path(part.stem).suffix)
-                subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(part), "-vn", "-c", "copy",
-                                str(src)], check=True)
-            covered = duration(src)
-            with open(d / "transcribe.log", "w") as log:
-                code = subprocess.call(
-                    [WHISPER, str(src), "--model", MODEL, "--output-dir", str(d / "transcript"),
-                     "--output-name", "transcript", "--output-format", "all"],
-                    stdout=log, stderr=subprocess.STDOUT, env={**os.environ, "PYTHONUNBUFFERED": "1"})
+            live[jid] = (cut, keep)
+            # Decode from the cut point into a temp wav; the recorder can keep writing the .part.
+            subprocess.run([FFMPEG, "-v", "error", "-y", "-ss", "%.3f" % cut, "-i", str(final or part),
+                            "-vn", "-ac", "1", "-ar", "16000", str(snap)], check=True)
+            new_len = duration(snap) or 0
+            if new_len > 1:
+                with open(d / "transcribe.log", "w") as log:
+                    code = subprocess.call(
+                        [WHISPER, str(snap), "--model", MODEL, "--output-dir", str(d),
+                         "--output-name", "chunk", "--output-format", "json"],
+                        stdout=log, stderr=subprocess.STDOUT, env={**os.environ, "PYTHONUNBUFFERED": "1"})
+                if code != 0:
+                    raise RuntimeError((tail(d / "transcribe.log", 1) or ["Transcription failed"])[0])
+                new = [{"start": s["start"] + cut, "end": s["end"] + cut, "text": s["text"].strip()}
+                       for s in json.loads(chunk.read_text())["segments"] if s["text"].strip()]
+                write_transcript(d, keep + new if new else old)
             meta = read_meta(d)
-            if code == 0:
-                meta.update(transcribed_seconds=covered, transcribed_at=time.time(),
-                            transcribe_error=None)
-            else:
-                meta["transcribe_error"] = (tail(d / "transcribe.log", 1) or ["Transcription failed"])[0]
+            meta.update(transcribed_seconds=cut + new_len, transcribed_at=time.time(), transcribe_error=None)
             write_meta(d, meta)
+            notify("Transcript ready", "%s (%s)" % (title, hms(cut + new_len)), jid)
         except Exception as e:  # surface it in the UI instead of dying silently
             meta = read_meta(d)
             meta["transcribe_error"] = str(e)
             write_meta(d, meta)
+            notify("Transcription failed", "%s: %s" % (title, e), jid)
         finally:
-            if src is not final and src is not None:
-                src.unlink(missing_ok=True)  # the snapshot is a throwaway copy of the .part
+            snap.unlink(missing_ok=True)
+            chunk.unlink(missing_ok=True)
+            live.pop(jid, None)
             transcribing.discard(jid)
 
     threading.Thread(target=run, daemon=True).start()
@@ -264,12 +327,41 @@ def job_info(d):
 
 
 def transcript(d):
-    segs = []
-    for line in tail(d / "transcribe.log", 100000):
-        m = SEG_RE.match(line.strip())
-        if m and m.group(2):
-            segs.append({"t": m.group(1), "text": m.group(2)})
-    return {"segments": segs, "transcribing": d.name in transcribing}
+    if d.name in live:  # saved lines before the cut, then Whisper's live output shifted past it
+        cut, segs = live[d.name]
+        segs = list(segs)
+        for line in tail(d / "transcribe.log", 100000):
+            m = SEG_RE.match(line.strip())
+            if m and m.group(2):
+                secs = sum(int(x) * 60 ** i for i, x in enumerate(reversed(m.group(1).split(":"))))
+                segs.append({"start": cut + secs, "text": m.group(2)})
+    else:
+        segs = load_segments(d)
+    return {"segments": [{"t": hms(s["start"]), "s": int(s["start"]), "text": s["text"]} for s in segs],
+            "transcribing": d.name in transcribing}
+
+
+def watch_recorders():
+    """When a recorder exits (stream over, or stopped), transcribe what it caught."""
+    while True:
+        time.sleep(15)
+        for d in JOBS.iterdir():
+            with lock:
+                try:
+                    meta = read_meta(d)
+                except (FileNotFoundError, ValueError):
+                    continue
+                pid = meta.get("pid")
+                if not pid or meta.get("finished_pid") == pid or d.name in transcribing \
+                        or recording_alive(d.name, meta):
+                    continue
+                meta["finished_pid"] = pid
+                write_meta(d, meta)
+                recorders.pop(d.name, None)
+            try:
+                start_transcription(d.name)
+            except (ValueError, LookupError):
+                pass  # nothing was recorded
 
 
 # ---------- http ----------
@@ -364,5 +456,6 @@ if __name__ == "__main__":
     if not PASSWORD_FILE.exists():
         raise SystemExit("Set a password first: put it in %s" % PASSWORD_FILE)
     session_token()
+    threading.Thread(target=watch_recorders, daemon=True).start()
     print("Stream Capture on http://127.0.0.1:%d" % PORT)
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

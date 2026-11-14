@@ -16,6 +16,8 @@ echo 'your-password' > ~/.config/stream-capture/password
 chmod 600 ~/.config/stream-capture/password
 ```
 
+Optional phone pings: put an ntfy topic name in `~/.config/stream-capture/ntfy_topic` and subscribe to it in the ntfy app. You get a ping when a transcript finishes or fails.
+
 The app asks for that password and remembers you for 30 days. Changing the file signs every browser out after a restart.
 
 ## Run
