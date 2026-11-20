@@ -41,7 +41,8 @@ def session_token():
 
 
 LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Stream Capture</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Uncut</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 :root{--bg:#f3f5f2;--panel:#fbfcfa;--ink:#1a2230;--muted:#5d6877;--line:#d6dbe0;--accent:#d22d3f;--link:#2c55c4}
 @media (prefers-color-scheme:dark){:root{--bg:#12161d;--panel:#171c25;--ink:#e5e9ef;--muted:#8e99a8;--line:#262e3a;--accent:#ff5c6c;--link:#93b1ff}}
@@ -50,7 +51,7 @@ form{width:100%%;max-width:340px;display:grid;gap:12px}h1{font:600 26px/1.2 Geor
 input,button{font:inherit;border-radius:8px;padding:11px 13px;border:1px solid var(--line)}
 input{background:var(--panel);color:var(--ink)}button{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500;cursor:pointer}
 input:focus-visible,button:focus-visible{outline:2px solid var(--link);outline-offset:2px}.err{color:var(--accent);font-size:14px;margin:0}
-</style></head><body><form method="post" action="/login"><h1>Stream Capture</h1>
+</style></head><body><form method="post" action="/login"><img src="/icon.svg" alt="" width="56" height="56"><h1>Uncut</h1>
 <label for="pw" style="color:var(--muted)">Password</label>
 <input id="pw" name="password" type="password" autocomplete="current-password" autofocus required>
 %s<button>Sign in</button></form></body></html>"""
@@ -685,6 +686,10 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p for p in self.path.split("?")[0].split("/") if p]
         if parts == ["login"]:
             return self.login(method)
+        if method == "GET" and parts in (["icon.svg"], ["apple-touch-icon.png"]):  # public: the login page uses them
+            f = ROOT / "brand" / ("uncut.svg" if parts[0] == "icon.svg" else parts[0])
+            return self.send(200, f.read_bytes(), "image/svg+xml" if f.suffix == ".svg" else "image/png",
+                             {"Cache-Control": "public, max-age=86400"})
         if not self.signed_in():
             if method == "GET" and not parts:
                 return self.send(303, b"", "text/plain", {"Location": "/login"})

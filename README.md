@@ -1,4 +1,4 @@
-# Stream Capture
+# Uncut
 
 Record a YouTube stream from its first minute (even while it's still live) and transcribe it locally on an Apple Silicon Mac.
 

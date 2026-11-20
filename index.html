@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stream Capture</title>
+<title>Uncut</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#1a2230">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37,7 +40,10 @@
   .row > .txt { padding-left: 18px; border-left: 1px solid var(--margin-rule); min-width: 0; }
 
   header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
-  .mark { font: 600 28px/1.1 var(--serif); letter-spacing: -0.01em; margin: 0; }
+  .mark { font: 600 30px/1 var(--serif); letter-spacing: -0.015em; margin: 0; display: flex; align-items: center; gap: 12px; }
+  .logo { width: 38px; height: 38px; flex: none; }
+  .logo rect { fill: var(--ink); } .logo circle { fill: var(--live); }
+  .logo path { fill: none; stroke: var(--paper); stroke-width: 7.5; stroke-linecap: round; stroke-linejoin: round; }
   .top-meta { display: flex; gap: 18px; color: var(--muted); font-size: 13.5px; }
   .on-air { color: var(--live); font-weight: 500; }
   .on-air::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--live);
@@ -131,7 +137,7 @@
 <body>
 <main>
   <header class="top">
-    <h1 class="mark">Stream Capture</h1>
+    <h1 class="mark"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><rect x="4" y="4" width="92" height="92" rx="22"/><path d="M26 24 V64 A8 8 0 0 0 42 64 V40 L72 56 L51 67.2"/><circle cx="74" cy="26" r="5.5"/></svg>Uncut</h1>
     <div class="top-meta"><span class="on-air" id="onair" hidden></span><span id="disk"></span></div>
   </header>
   <p class="intro">Record a YouTube stream from its first minute, keep your own unedited copy, and read it back with a summary. It works while the stream is still live.</p>

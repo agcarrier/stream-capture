@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Uncut">
+  <title>Uncut</title>
+  <style>
+    .tile { fill: #1a2230; } .line { stroke: #f3f5f2; } .rec { fill: #d22d3f; }
+    @media (prefers-color-scheme: dark) { .tile { fill: #e5e9ef; } .line { stroke: #12161d; } .rec { fill: #ff5c6c; } }
+  </style>
+  <rect class="tile" x="4" y="4" width="92" height="92" rx="22"/>
+  <!-- one unbroken line: down into a U, up, then folds into a play triangle -->
+  <path class="line" d="M26 24 V64 A8 8 0 0 0 42 64 V40 L72 56 L51 67.2"
+        fill="none" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle class="rec" cx="74" cy="26" r="5.5"/>
+</svg>
