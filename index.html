@@ -256,7 +256,7 @@ async function loadSummary(tx, j) {
     <h3>Summary</h3>${stale}
     <p>${esc(s.tldr)}</p>
     <h4>Key points</h4>
-    <ol>${s.key_points.map(p => `<li>${timeLink(j, p.s, p.timestamp)}<span>${esc(p.text)}</span></li>`).join("")}</ol>
+    <ol>${s.key_points.map(p => `<li>${timeLink(j, p.s, p.timestamp.replace(/[\[\]\s]/g, ""))}<span>${esc(p.text)}</span></li>`).join("")}</ol>
     ${s.mentions.length ? `<h4>Mentioned</h4><ul>${s.mentions.map(m => `<li><strong>${esc(m.name)}</strong>: ${esc(m.note)}</li>`).join("")}</ul>` : ""}`;
   box.hidden = false;
 }
