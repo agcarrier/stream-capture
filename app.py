@@ -43,13 +43,13 @@ def session_token():
 LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Stream Capture</title>
 <style>
-:root{--bg:#f4f3ef;--panel:#fff;--ink:#1b1b19;--muted:#6d6b64;--line:#e3e1da;--accent:#e5484d;--accent-ink:#fff}
-@media (prefers-color-scheme:dark){:root{--bg:#121211;--panel:#1b1b1a;--ink:#ecebe6;--muted:#9a988f;--line:#2c2b29;--accent:#ff5c61;--accent-ink:#160707}}
+:root{--bg:#f3f5f2;--panel:#fbfcfa;--ink:#1a2230;--muted:#5d6877;--line:#d6dbe0;--accent:#d22d3f;--link:#2c55c4}
+@media (prefers-color-scheme:dark){:root{--bg:#12161d;--panel:#171c25;--ink:#e5e9ef;--muted:#8e99a8;--line:#262e3a;--accent:#ff5c6c;--link:#93b1ff}}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif;padding:16px}
-form{width:100%%;max-width:340px;display:grid;gap:12px}h1{font-size:22px;margin:0 0 4px}
-input,button{font:inherit;border-radius:10px;padding:12px 14px;border:1px solid var(--line)}
-input{background:var(--panel);color:var(--ink)}button{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:500;cursor:pointer}
-input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}.err{color:var(--accent);font-size:14px;margin:0}
+form{width:100%%;max-width:340px;display:grid;gap:12px}h1{font:600 26px/1.2 Georgia,serif;margin:0 0 4px}
+input,button{font:inherit;border-radius:8px;padding:11px 13px;border:1px solid var(--line)}
+input{background:var(--panel);color:var(--ink)}button{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500;cursor:pointer}
+input:focus-visible,button:focus-visible{outline:2px solid var(--link);outline-offset:2px}.err{color:var(--accent);font-size:14px;margin:0}
 </style></head><body><form method="post" action="/login"><h1>Stream Capture</h1>
 <label for="pw" style="color:var(--muted)">Password</label>
 <input id="pw" name="password" type="password" autocomplete="current-password" autofocus required>
@@ -315,7 +315,7 @@ def start_transcription(jid, then_summarize=False):
                     go = jid not in summarizing
                     summarizing.add(jid)
                 if go:
-                    threading.Thread(target=run_summary, args=(d,), daemon=True).start()
+                    threading.Thread(target=run_summary, args=(d, True), daemon=True).start()
         except Exception as e:  # surface it in the UI instead of dying silently
             meta = read_meta(d)
             meta["transcribe_error"] = str(e)
@@ -393,7 +393,7 @@ def start_summary(jid):
     threading.Thread(target=run_summary, args=(d,), daemon=True).start()
 
 
-def run_summary(d):
+def run_summary(d, save=False):
     """Blocking; the caller has already added d.name to summarizing."""
     title = read_meta(d).get("title") or d.name
     try:
@@ -402,6 +402,11 @@ def run_summary(d):
         meta["summary_error"] = None
         write_meta(d, meta)
         notify("Summary ready", "%s\n\n%s" % (title, data["tldr"]), d.name)
+        if save:
+            try:
+                save_to_vault(d.name)
+            except Exception as e:
+                print("vault save skipped:", e)
     except Exception as e:
         meta = read_meta(d)
         meta["summary_error"] = str(e)
@@ -409,6 +414,120 @@ def run_summary(d):
         notify("Summary failed", "%s: %s" % (title, e), d.name)
     finally:
         summarizing.discard(d.name)
+
+
+def stream_is_live(url):
+    probe = subprocess.run([YTDLP, "--no-warnings", "--no-playlist", "--skip-download",
+                            "--print", "%(live_status)s", "--", url], capture_output=True, text=True, timeout=90)
+    return probe.stdout.strip() in ("is_live", "is_upcoming")
+
+
+def finalize(d):
+    """Turn a leftover .part into a normal audio file. Only once the stream is over: Resume needs the .part."""
+    final, part = audio_files(d)
+    if final or not part:
+        return
+    out = d / part.stem  # audio.m4a.part -> audio.m4a
+    tmp = d / ("finalizing" + out.suffix)
+    subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(part), "-vn", "-c", "copy", str(tmp)], check=True)
+    tmp.rename(out)
+    part.unlink()
+    (d / (part.stem + ".ytdl")).unlink(missing_ok=True)
+
+
+def delete_job(jid):
+    d = job_dir(jid)
+    if recording_alive(jid, read_meta(d)) or jid in transcribing or jid in summarizing:
+        raise ValueError("Stop the recording and wait for transcripts and summaries to finish first")
+    shutil.rmtree(d)
+
+
+def title_of(meta, jid):
+    """yt-dlp appends the date and time to live-stream titles; drop it."""
+    return re.sub(r"\s\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", "", meta.get("title") or jid)
+
+
+def summary_covers(d):
+    try:
+        return json.loads((d / "transcript" / "summary.json").read_text()).get("covers_seconds")
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def dir_bytes(d):
+    return sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+
+
+def search(q):
+    q = q.strip()
+    if len(q) < 2:
+        return []
+    word = re.compile(r"\b" + re.escape(q), re.I)  # "ebook" shouldn't match "Facebook"
+    hits = []
+    for d in sorted(JOBS.iterdir(), key=lambda p: -p.stat().st_mtime):
+        if not (d / "meta.json").exists():
+            continue
+        title = title_of(read_meta(d), d.name)
+        for s in load_segments(d):
+            if word.search(s["text"]):
+                hits.append({"id": d.name, "title": title, "t": hms(s["start"]), "s": int(s["start"]),
+                             "text": s["text"]})
+                if len(hits) >= 300:  # ponytail: linear scan of every transcript; index them if this gets slow
+                    return hits
+    return hits
+
+
+VAULT = Path(os.environ.get("VAULT_DIR", Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/Claude Vault"))
+
+
+def save_to_vault(jid):
+    """Write the stream as a `source` note in the vault's raw/. Raw notes are never edited, so this runs once."""
+    d = job_dir(jid)
+    segs = load_segments(d)
+    if not segs:
+        raise ValueError("Transcribe it first")
+    meta = read_meta(d)
+    if meta.get("vault_note") and (VAULT / meta["vault_note"]).exists():
+        raise ValueError("Already in the vault at %s" % meta["vault_note"])
+    title = title_of(meta, jid)
+    url = meta.get("url") or ""
+    day = time.strftime("%Y-%m-%d", time.localtime(meta.get("started") or time.time()))
+    today = time.strftime("%Y-%m-%d")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60].strip("-") or jid.lower()
+    rel = "raw/%s-%s.md" % (day, slug)
+    out = VAULT / rel
+    if out.exists():
+        raise ValueError("A note already exists at %s" % rel)
+    yt = re.search(r"youtube\.com|youtu\.be", url)
+
+    def at(s):
+        return "[%s](https://www.youtube.com/watch?v=%s&t=%ds)" % (hms(s), jid, s) if yt else hms(s)
+
+    f = d / "transcript" / "summary.json"
+    summ = json.loads(f.read_text()) if f.exists() else None
+    md = ["---", "type: source", "source_url: %s" % json.dumps(url), "captured: %s" % today,
+          "created: %s" % today, "updated: %s" % today, "tags: [stream-transcript]", "---", "",
+          "# %s" % title, "",
+          "Recorded and transcribed with [[projects/apps/stream-capture|Stream Capture]]. "
+          "Length %s. Timestamps follow the unedited stream." % hms(segs[-1]["end"]), ""]
+    if summ:
+        md += ["## Summary", "", summ["tldr"], "", "## Key points", ""]
+        md += ["- %s %s" % (at(p["s"]) if p.get("s") is not None else p["timestamp"], p["text"])
+               for p in summ["key_points"]]
+        if summ["mentions"]:
+            md += ["", "## Mentioned", ""] + ["- **%s**: %s" % (m["name"], m["note"]) for m in summ["mentions"]]
+        md.append("")
+    md += ["## Transcript", ""] + ["%s %s" % (at(int(s["start"])), s["text"]) for s in segs]
+    out.parent.mkdir(exist_ok=True)
+    out.write_text("\n".join(md) + "\n")
+    meta = read_meta(d)
+    meta["vault_note"] = rel
+    write_meta(d, meta)
+    return rel
+
+
+AUDIO_TYPES = {".m4a": "audio/mp4", ".mp4": "audio/mp4", ".webm": "audio/webm", ".opus": "audio/ogg",
+               ".mp3": "audio/mpeg"}
 
 
 # ---------- views ----------
@@ -426,7 +545,7 @@ def job_info(d):
     state = "recording" if rec else "complete" if final else "stopped" if part else "empty"
     return {
         "id": jid,
-        "title": meta.get("title") or jid,
+        "title": title_of(meta, jid),
         "url": meta.get("url"),
         "live_status": meta.get("live_status"),
         "started": meta.get("started"),
@@ -442,7 +561,11 @@ def job_info(d):
         "summary_at": (d / "transcript" / "summary.json").stat().st_mtime
                       if (d / "transcript" / "summary.json").exists() else None,
         "summarizing": jid in summarizing,
+        "summary_covers": summary_covers(d),
         "summary_error": meta.get("summary_error"),
+        "playable": bool(final) and final.suffix in AUDIO_TYPES,
+        "bytes": dir_bytes(d),
+        "vault_note": meta.get("vault_note"),
     }
 
 
@@ -478,6 +601,11 @@ def watch_recorders():
                 write_meta(d, meta)
                 recorders.pop(d.name, None)
             try:
+                if meta.get("url") and not stream_is_live(meta["url"]):
+                    finalize(d)
+            except (subprocess.SubprocessError, OSError) as e:
+                print("finalize skipped:", e)
+            try:
                 start_transcription(d.name, then_summarize=True)
             except (ValueError, LookupError):
                 pass  # nothing was recorded
@@ -499,6 +627,41 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
+
+    def send_file(self, f, ctype):
+        """Serve a file with Range support, so the audio player can seek (Safari insists on it)."""
+        size = f.stat().st_size
+        start, end = 0, size - 1
+        m = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "")
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                start = int(m.group(1))
+                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            else:
+                start = max(size - int(m.group(2)), 0)
+            if start > end:
+                return self.send(416, b"", "text/plain", {"Content-Range": "bytes */%d" % size})
+            self.send_response(206)
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        else:
+            self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "private, max-age=3600")
+        self.end_headers()
+        with open(f, "rb") as fh:
+            fh.seek(start)
+            left = end - start + 1
+            while left > 0:
+                chunk = fh.read(min(1 << 16, left))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    return  # the player jumped elsewhere and dropped this request
+                left -= len(chunk)
 
     def signed_in(self):
         cookies = SimpleCookie(self.headers.get("Cookie") or "")
@@ -529,13 +692,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if method == "GET" and not parts:
                 return self.send(200, (ROOT / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if method == "GET" and parts == ["api", "search"]:
+                q = parse_qs(self.path.partition("?")[2]).get("q", [""])[0]
+                return self.send(200, {"hits": search(q)})
             if parts[:2] != ["api", "jobs"]:
                 return self.send(404, {"error": "Not found"})
             rest = parts[2:]
             if method == "GET" and not rest:
                 dirs = [d for d in JOBS.iterdir() if (d / "meta.json").exists()]
                 jobs = sorted((job_info(d) for d in dirs), key=lambda j: -(j["started"] or 0))
-                return self.send(200, {"jobs": jobs})
+                return self.send(200, {"jobs": jobs, "used_bytes": sum(j["bytes"] for j in jobs),
+                                       "free_bytes": shutil.disk_usage(JOBS).free})
             if method == "POST" and not rest:
                 length = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(length) or b"{}")
@@ -555,6 +722,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"ok": True})
             if method == "POST" and action == "resume":
                 return self.send(200, {"id": start_recording(read_meta(d)["url"])})
+            if method == "GET" and action == "audio":
+                final, _ = audio_files(d)
+                if not final or final.suffix not in AUDIO_TYPES:
+                    return self.send(404, {"error": "No finished audio file yet"})
+                return self.send_file(final, AUDIO_TYPES[final.suffix])
+            if method == "POST" and action == "delete":
+                delete_job(d.name)
+                return self.send(200, {"ok": True})
+            if method == "POST" and action == "vault":
+                return self.send(200, {"note": save_to_vault(d.name)})
             if method == "GET" and action == "summary":
                 f = d / "transcript" / "summary.json"
                 return self.send(200, json.loads(f.read_text()) if f.exists() else {})

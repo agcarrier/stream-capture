@@ -6,106 +6,154 @@
 <title>Stream Capture</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* Script margin: the page reads like a transcript. A margin of timestamps runs down the left,
+     separated from the text by one rule. Yellow marks what you searched for; red only means recording. */
   :root {
-    --bg: #f4f3ef; --panel: #ffffff; --ink: #1b1b19; --muted: #6d6b64; --line: #e3e1da;
-    --accent: #e5484d; --accent-ink: #fff; --ok: #2f8f5b; --warn: #b7791f; --chip: #efede7;
-    --focus: #1b1b19;
+    color-scheme: light dark;
+    --paper: #f3f5f2; --sheet: #fbfcfa; --ink: #1a2230; --muted: #5d6877; --rule: #d6dbe0;
+    --margin-rule: #b9c3cf; --link: #2c55c4; --marker: #f6d75f; --live: #d22d3f; --ok: #2e7d4f; --warn: #a86a12;
+    --gutter: 4.75rem;
+    --serif: "Literata", Georgia, serif; --sans: "Schibsted Grotesk", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #121211; --panel: #1b1b1a; --ink: #ecebe6; --muted: #9a988f; --line: #2c2b29;
-      --accent: #ff5c61; --accent-ink: #160707; --ok: #5cc48a; --warn: #e0a84a; --chip: #252422;
-      --focus: #ecebe6;
+      --paper: #12161d; --sheet: #171c25; --ink: #e5e9ef; --muted: #8e99a8; --rule: #262e3a;
+      --margin-rule: #364152; --link: #93b1ff; --marker: #8a7420; --live: #ff5c6c; --ok: #64c48c; --warn: #e2a64c;
     }
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.5 "Schibsted Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  main { max-width: 900px; margin: 0 auto; padding: 48px 20px 80px; }
-  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0; display: flex; align-items: center; gap: 10px; }
-  h1 .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
-  .sub { color: var(--muted); margin: 6px 0 28px; max-width: 60ch; }
-  form { display: flex; gap: 8px; margin-bottom: 8px; }
-  input[type=url], input[type=search] { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--panel);
-    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-  input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  button, .btn { font: inherit; font-weight: 500; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-    border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-  button:hover, .btn:hover { border-color: var(--muted); }
-  button:disabled { opacity: .5; cursor: default; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; padding: 12px 18px; }
-  .msg { min-height: 22px; font-size: 14px; color: var(--accent); margin-bottom: 18px; }
-  .jobs { display: grid; gap: 16px; }
-  .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; padding: 32px; text-align: center; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-  .head { display: grid; grid-template-columns: 168px 1fr; gap: 16px; padding: 16px; }
-  .thumb { width: 168px; aspect-ratio: 16/9; border-radius: 8px; object-fit: cover; background: var(--chip); }
-  .title { font-weight: 600; font-size: 16px; line-height: 1.35; margin: 0 0 6px; overflow-wrap: anywhere; }
-  .title a { color: inherit; text-decoration: none; } .title a:hover { text-decoration: underline; }
-  .status { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13.5px; color: var(--muted); margin-bottom: 12px; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; letter-spacing: .04em;
-    text-transform: uppercase; padding: 3px 9px; border-radius: 99px; background: var(--chip); color: var(--ink); }
-  .pill.recording { color: var(--accent); } .pill.complete { color: var(--ok); } .pill.stopped { color: var(--warn); }
-  .pill.recording::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s infinite; }
-  @keyframes pulse { 50% { opacity: .25; } }
-  @media (prefers-reduced-motion: reduce) { .pill.recording::before { animation: none; } }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .err { color: var(--accent); font-size: 13.5px; margin-top: 8px; overflow-wrap: anywhere; }
+  html { background: var(--paper); }
+  body { margin: 0; color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  main { max-width: 820px; margin: 0 auto; padding: 40px 24px 96px; }
+  a { color: var(--link); }
+  :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 3px; }
+
+  /* the margin grid every row shares */
+  .row { display: grid; grid-template-columns: var(--gutter) 1fr; }
+  .row > .gut { padding-right: 14px; text-align: right; color: var(--muted); font-size: 13px; }
+  .row > .txt { padding-left: 18px; border-left: 1px solid var(--margin-rule); min-width: 0; }
+
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .mark { font: 600 28px/1.1 var(--serif); letter-spacing: -0.01em; margin: 0; }
+  .top-meta { display: flex; gap: 18px; color: var(--muted); font-size: 13.5px; }
+  .on-air { color: var(--live); font-weight: 500; }
+  .on-air::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--live);
+    margin-right: 7px; vertical-align: 1px; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .on-air::before, .tally.recording { animation: none; } }
+
+  .intro { font: 17px/1.6 var(--serif); color: var(--muted); max-width: 58ch; margin: 0 0 22px; }
+  .field { display: flex; gap: 8px; }
+  input[type=url], input[type=search] { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: var(--ink);
+    background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 11px 13px; }
+  input::placeholder { color: var(--muted); }
+  button, .btn { font: 500 14px/1 var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--rule);
+    border-radius: 7px; padding: 8px 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  button:hover:not(:disabled), .btn:hover { border-color: var(--muted); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); padding: 11px 16px; font-size: 15px; }
+  button.quiet { border-color: transparent; color: var(--muted); padding-left: 6px; padding-right: 6px; }
+  button.quiet:hover:not(:disabled) { color: var(--ink); border-color: transparent; text-decoration: underline; }
+  button.danger:hover:not(:disabled) { color: var(--live); }
+  .msg { min-height: 22px; font-size: 14px; color: var(--live); margin: 6px 0 4px; }
+  .find { margin: 4px 0 34px; }
+
+  /* recordings */
+  .rec { padding: 22px 0 6px; border-top: 1px solid var(--rule); }
+  .rec .gut { padding-top: 5px; }
+  .tally { display: block; width: 9px; height: 9px; border-radius: 50%; margin: 0 0 8px auto; background: var(--margin-rule); }
+  .tally.recording { background: var(--live); animation: pulse 1.4s ease-in-out infinite; }
+  .tally.complete { background: var(--ok); } .tally.stopped { background: var(--warn); }
+  .len { display: block; color: var(--ink); font-weight: 500; }
+  .head { display: flex; gap: 16px; align-items: flex-start; }
+  .head .info { flex: 1; min-width: 0; }
+  .thumb { width: 112px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: var(--rule); flex: none; }
+  .title { font: 600 21px/1.3 var(--serif); margin: 0 0 6px; overflow-wrap: anywhere; }
+  .title a { color: inherit; text-decoration: none; }
+  .title a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .status { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13.5px; }
+  .status .state { color: var(--ink); font-weight: 500; }
+  .status .state.recording { color: var(--live); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .err { color: var(--live); font-size: 13.5px; margin-top: 8px; overflow-wrap: anywhere; }
   .note { color: var(--warn); font-size: 13.5px; margin-top: 8px; }
-  .tx { border-top: 1px solid var(--line); }
-  .sum { padding: 16px 16px 4px; border-bottom: 1px solid var(--line); max-width: 72ch; }
-  .sum h3 { font-size: 16px; margin: 0 0 6px; }
-  .sum h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 6px; }
-  .sum p { margin: 0 0 8px; }
-  .sum ol, .sum ul { margin: 0 0 12px; padding: 0; list-style: none; }
-  .sum ol li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 4px 0; }
-  .sum ul li { padding: 3px 0; }
-  .sum .t, .line .t { font: 12.5px/1.9 "JetBrains Mono", ui-monospace, monospace; color: var(--muted); text-decoration: none; }
-  .sum a.t:hover { color: var(--accent); text-decoration: underline; }
-  .tx-bar { display: flex; gap: 8px; padding: 12px 16px; align-items: center; flex-wrap: wrap; }
-  .tx-bar input { padding: 8px 12px; flex: 1 1 180px; }
-  .tx-info { font-size: 13px; color: var(--muted); padding: 0 16px 8px; }
-  .lines { max-height: 460px; overflow-y: auto; padding: 4px 16px 16px; }
-  .line { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 4px 0; }
-  .line .t { font: 12.5px/1.9 "JetBrains Mono", ui-monospace, monospace; color: var(--muted); text-decoration: none; }
-  .line a.t:hover { color: var(--accent); text-decoration: underline; }
-  .line mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 3px; }
-  .working { color: var(--muted); font-size: 14px; padding: 8px 0; }
-  details { margin-top: 40px; color: var(--muted); font-size: 14px; }
-  summary { cursor: pointer; color: var(--ink); font-weight: 500; }
-  details ol { padding-left: 20px; } details li { margin: 6px 0; }
-  code { font: 12.5px "JetBrains Mono", ui-monospace, monospace; background: var(--chip); padding: 1px 5px; border-radius: 4px; }
-  @media (max-width: 560px) {
-    main { padding: 28px 16px 60px; }
-    form { flex-direction: column; }
-    .head { grid-template-columns: 1fr; }
-    .thumb { width: 100%; }
+
+  /* panel: player, summary, transcript */
+  .panel { margin: 16px 0 10px; }
+  .panel audio { width: 100%; height: 40px; margin: 2px 0 6px; }
+  .sum { font: 16.5px/1.65 var(--serif); }
+  .sum h3 { font: 600 15px/1.3 var(--sans); margin: 18px 0 6px; }
+  .sum p { margin: 0 0 6px; max-width: 64ch; }
+  .sum ol, .sum ul { list-style: none; margin: 0; padding: 0; }
+  .sum li { padding: 3px 0; }
+  .sum .row .txt, .lines .row .txt { max-width: calc(64ch + 18px); }
+  .stale { color: var(--warn); font: 13.5px/1.5 var(--sans); }
+  a.t, span.t { color: var(--muted); text-decoration: none; font: 13px/2.05 var(--sans); }
+  a.t:hover { color: var(--link); text-decoration: underline; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 6px; }
+  .tools input { flex: 1 1 200px; padding: 8px 11px; font-size: 14px; }
+  .tx-info { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+  .lines { max-height: 62vh; overflow-y: auto; font: 16.5px/1.65 var(--serif); padding-bottom: 8px; overscroll-behavior: contain; }
+  .lines .row .txt { padding-top: 2px; padding-bottom: 2px; }
+  .lines .row.now .gut { color: var(--ink); font-weight: 600; }
+  .lines .row.now .txt { border-left: 3px solid var(--ink); padding-left: 16px; }
+  .lines .row.flash .txt { background: color-mix(in srgb, var(--marker) 45%, transparent); }
+  mark { background: var(--marker); color: inherit; border-radius: 2px; padding: 0 1px; }
+  .working { color: var(--muted); font: 14px var(--sans); padding: 6px 0; }
+
+  /* search across recordings */
+  .results { margin: -18px 0 36px; }
+  .results h3 { font: 600 15px/1.35 var(--serif); margin: 18px 0 4px; }
+  .results .row { font: 15.5px/1.6 var(--serif); cursor: pointer; }
+  .results .row:hover .txt { background: color-mix(in srgb, var(--marker) 20%, transparent); }
+  .results-info { color: var(--muted); font-size: 13.5px; }
+
+  .empty { font: 17px/1.6 var(--serif); color: var(--muted); padding: 24px 0; border-top: 1px solid var(--rule); }
+  details { margin-top: 48px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--rule); padding-top: 18px; }
+  details summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+  details ol { padding-left: 20px; max-width: 64ch; } details li { margin: 8px 0; }
+  code { font: 13px ui-monospace, Menlo, monospace; }
+
+  @media (max-width: 600px) {
+    :root { --gutter: 3.6rem; }
+    main { padding: 26px 16px 72px; }
+    .field { flex-direction: column; }
+    .thumb { display: none; }
+    .row > .gut { padding-right: 10px; font-size: 12.5px; }
+    .row > .txt { padding-left: 12px; }
+    .lines .row.now .txt { padding-left: 10px; }
   }
 </style>
 </head>
 <body>
 <main>
-  <h1><span class="dot" aria-hidden="true"></span>Stream Capture</h1>
-  <p class="sub">Record a YouTube stream from its first minute, then turn it into a searchable transcript on this Mac. It works while the stream is still live.</p>
+  <header class="top">
+    <h1 class="mark">Stream Capture</h1>
+    <div class="top-meta"><span class="on-air" id="onair" hidden></span><span id="disk"></span></div>
+  </header>
+  <p class="intro">Record a YouTube stream from its first minute, keep your own unedited copy, and read it back with a summary. It works while the stream is still live.</p>
 
-  <form id="new">
-    <input id="url" type="url" required aria-label="Video URL" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off">
+  <form id="new" class="field">
+    <input id="url" type="url" required aria-label="Stream link" placeholder="Paste a YouTube stream link" autocomplete="off">
     <button class="primary" id="go" type="submit">Start recording</button>
   </form>
   <div class="msg" id="msg" role="status"></div>
 
-  <section class="jobs" id="jobs" aria-live="polite"></section>
+  <div class="find field"><input id="q" type="search" placeholder="Search every transcript" aria-label="Search every transcript"></div>
+  <section class="results" id="results" hidden aria-live="polite"></section>
+
+  <section id="jobs" aria-label="Recordings"></section>
 
   <details>
     <summary>How it works</summary>
     <ol>
-      <li><b>Record.</b> <code>yt-dlp --live-from-start</code> rewinds to the stream's first minute, pulls it down in 5-second chunks, then keeps up with the live edge until the stream ends or you hit Stop. Only the audio is saved.</li>
-      <li><b>Snapshot.</b> While recording, the file on disk is still being written. "Transcribe" uses <code>ffmpeg</code> to copy everything captured so far into a clean file, without interrupting the recording.</li>
-      <li><b>Transcribe.</b> <code>mlx_whisper</code> runs Whisper large-v3-turbo on your Mac's GPU. Lines show up as they finish. The first run downloads the model (about 1.6 GB).</li>
-      <li><b>Keep it.</b> Everything stays in <code>stream-capture/jobs/&lt;video-id&gt;/</code>, including your copy of the ending they plan to cut.</li>
+      <li><b>Record.</b> <code>yt-dlp --live-from-start</code> rewinds to the stream's first minute and keeps up with the live edge until it ends or you stop it. Only the audio is saved, about 1 MB a minute.</li>
+      <li><b>Transcribe.</b> Whisper runs on this Mac's GPU. When a stream ends it transcribes on its own, and later updates only add the new audio.</li>
+      <li><b>Summarize.</b> OpenAI writes a short summary with timestamped key points, and your phone gets a ping when it's done.</li>
+      <li><b>Keep it.</b> Times in the margin play your own copy, including any ending they cut from the published version. Save to Obsidian puts the summary and transcript in your vault.</li>
     </ol>
   </details>
 </main>
@@ -121,7 +169,13 @@ const clock = sec => {
 };
 const ago = ts => {
   const m = Math.round((Date.now() / 1000 - ts) / 60);
-  return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago";
+  return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago";
+};
+const size = b => b >= 1 << 30 ? (b / (1 << 30)).toFixed(1) + " GB" : Math.max(1, Math.round(b / (1 << 20))) + " MB";
+const highlight = (text, q) => {
+  if (!q) return esc(text);
+  const re = new RegExp("\\b(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+  return esc(text).replace(re, "<mark>$1</mark>");  // ponytail: q is matched on escaped text; fine for words
 };
 
 async function api(path, opts = {}) {
@@ -145,165 +199,262 @@ $("#new").addEventListener("submit", async e => {
   btn.disabled = false; btn.textContent = "Start recording";
 });
 
-const open = new Set();       // job ids with the transcript panel open
-const txState = {};           // id -> {segments, key}
+const open = new Set();   // recordings with their panel open
+const txState = {};       // id -> {segments, key}
+const jobsById = {};
+
+// A time in the margin. It plays your own copy when there is one, else opens YouTube there.
+function timeLink(j, secs, label) {
+  if (secs == null) return `<span class="t">${esc(label)}</span>`;
+  const yt = /youtube\.com|youtu\.be/.test(j.url || "");
+  const href = yt ? `https://www.youtube.com/watch?v=${encodeURIComponent(j.id)}&t=${secs}s` : "#";
+  if (!yt && !j.playable) return `<span class="t">${esc(label)}</span>`;
+  return `<a class="t" href="${href}" data-s="${secs}" target="_blank" rel="noopener" title="${j.playable ? "Play from here" : "Open the video here"}">${esc(label)}</a>`;
+}
 
 function headHTML(j) {
-  const label = { recording: "Recording", complete: "Saved", stopped: "Stopped", empty: "Starting" }[j.state];
-  const behind = j.has_transcript && j.captured_seconds && j.transcribed_seconds != null
-    ? j.captured_seconds - j.transcribed_seconds : 0;
-  const bits = [`<span class="pill ${j.state}">${label}</span>`,
-    `<span>${clock(j.captured_seconds)} captured</span>`];
-  if (j.has_transcript) bits.push(`<span>Transcript covers ${clock(j.transcribed_seconds)} · ${ago(j.transcribed_at)}</span>`);
-  if (j.transcribing) bits.push(`<span>Transcribing…</span>`);
-  if (j.summarizing) bits.push(`<span>Summarizing…</span>`);
-  const sumLabel = j.summarizing ? "Summarizing…" : j.summary_at ? "Update summary" : "Summarize";
-  const txLabel = j.transcribing ? "Transcribing…" : j.has_transcript ? "Update transcript" : "Transcribe now";
+  const word = { recording: "Recording", complete: "Saved", stopped: "Stopped", empty: "Starting" }[j.state];
+  const behind = j.has_transcript && j.captured_seconds && j.transcribed_seconds != null ? j.captured_seconds - j.transcribed_seconds : 0;
+  const bits = [`<span class="state ${j.state}">${word}</span>`];
+  if (j.transcribing) bits.push("<span>Transcribing…</span>");
+  else if (j.has_transcript) bits.push(`<span>Transcript covers ${clock(j.transcribed_seconds)}, ${ago(j.transcribed_at)}</span>`);
+  if (j.summarizing) bits.push("<span>Summarizing…</span>");
+  else if (j.summary_at) bits.push("<span>Summary ready</span>");
+  bits.push(`<span>${size(j.bytes)}</span>`);
+  const can = !(j.transcribing || j.summarizing);
+  const acts = [];
+  if (j.has_transcript || j.transcribing || j.playable)
+    acts.push(`<button data-act="toggle">${open.has(j.id) ? "Close" : j.has_transcript ? "Open transcript" : "Open player"}</button>`);
+  if (!j.has_transcript || j.transcribing || behind > 5 || j.state === "recording")
+    acts.push(`<button data-act="transcribe" ${!can || !j.captured_seconds ? "disabled" : ""}>${j.transcribing ? "Transcribing…" : j.has_transcript ? "Update transcript" : "Transcribe"}</button>`);
+  const sumBehind = j.summary_at && j.summary_covers != null && j.transcribed_seconds - j.summary_covers > 120;
+  if (j.has_transcript && (!j.summary_at || j.summarizing || sumBehind || j.summary_error))
+    acts.push(`<button data-act="summarize" ${!can ? "disabled" : ""}>${j.summarizing ? "Summarizing…" : j.summary_at ? "Update summary" : "Summarize"}</button>`);
+  if (j.state === "recording") acts.push(`<button data-act="stop">Stop recording</button>`);
+  if (j.state === "stopped") acts.push(`<button data-act="resume">Resume recording</button>`);
+  if (j.vault_note) acts.push(`<a class="btn" href="obsidian://open?vault=${encodeURIComponent("Claude Vault")}&file=${encodeURIComponent(j.vault_note)}" title="${esc(j.vault_note)}">Open in Obsidian</a>`);
+  else if (j.has_transcript) acts.push(`<button data-act="vault" ${!can ? "disabled" : ""}>Save to Obsidian</button>`);
+  if (j.state !== "recording") acts.push(`<button class="quiet danger" data-act="delete" ${!can ? "disabled" : ""}>Delete</button>`);
   return `
-      <p class="title"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></p>
-      <div class="status">${bits.join("")}</div>
-      <div class="actions">
-        <button data-act="transcribe" ${j.transcribing || !j.captured_seconds ? "disabled" : ""}>${txLabel}</button>
-        ${j.has_transcript ? `<button data-act="summarize" ${j.summarizing || j.transcribing ? "disabled" : ""}>${sumLabel}</button>` : ""}
-        ${j.has_transcript || j.transcribing ? `<button data-act="toggle">${open.has(j.id) ? "Hide transcript" : "Show transcript"}</button>` : ""}
-        ${j.state === "recording" ? `<button data-act="stop">Stop recording</button>` : ""}
-        ${j.state === "stopped" ? `<button data-act="resume">Resume recording</button>` : ""}
-      </div>
-      ${j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
-      ${j.transcribe_error && !j.transcribing ? `<div class="err">Transcription failed: ${esc(j.transcribe_error)}</div>` : ""}
-      ${j.summary_error && !j.summarizing ? `<div class="err">Summary failed: ${esc(j.summary_error)}</div>` : ""}
-      ${behind > 120 && !j.transcribing ? `<div class="note">${clock(behind)} recorded since the last transcript.</div>` : ""}`;
+    <h2 class="title"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></h2>
+    <div class="status">${bits.join("")}</div>
+    <div class="actions">${acts.join("")}</div>
+    ${j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
+    ${j.transcribe_error && !j.transcribing ? `<div class="err">Transcription failed: ${esc(j.transcribe_error)}</div>` : ""}
+    ${j.summary_error && !j.summarizing ? `<div class="err">Summary failed: ${esc(j.summary_error)}</div>` : ""}
+    ${behind > 120 && !j.transcribing ? `<div class="note">${clock(behind)} recorded since the last transcript.</div>` : ""}`;
 }
 
 function card(j) {
   let el = document.getElementById("job-" + j.id);
   if (!el) {
     el = document.createElement("article");
-    el.className = "card"; el.id = "job-" + j.id;
-    el.innerHTML = `<div class="head"><img class="thumb" src="https://i.ytimg.com/vi/${esc(j.id)}/mqdefault.jpg" alt=""><div class="info"></div></div>`;
-    el.addEventListener("click", e => act(j.id, e.target.closest("button")?.dataset.act));
+    el.className = "rec"; el.id = "job-" + j.id;
+    el.innerHTML = `
+      <div class="row"><div class="gut"><span class="tally"></span><span class="len"></span></div>
+        <div class="txt head"><div class="info"></div><img class="thumb" src="https://i.ytimg.com/vi/${esc(j.id)}/mqdefault.jpg" alt="" onload="if (this.naturalWidth <= 120) this.remove()" onerror="this.remove()"></div></div>`;
+    el.addEventListener("click", e => act(j.id, e.target.closest("button[data-act]")?.dataset.act));
   }
+  $(".tally", el).className = "tally " + j.state;
+  $(".tally", el).title = j.state;
+  $(".len", el).textContent = clock(j.captured_seconds);
   const html = headHTML(j);
   if (el._html !== html) { $(".info", el).innerHTML = html; el._html = html; }
-  el._job = j;
   return el;
 }
 
 async function act(id, what) {
   if (!what) return;
-  const el = document.getElementById("job-" + id);
+  const j = jobsById[id];
   say("");
   try {
     if (what === "toggle") {
       open.has(id) ? open.delete(id) : open.add(id);
+    } else if (what === "delete") {
+      if (!confirm(`Delete "${j.title}"? This removes the audio, transcript and summary (${size(j.bytes)}) from this Mac. A note already saved to Obsidian stays.`)) return;
+      await api(`/api/jobs/${id}/delete`, { method: "POST" });
+      open.delete(id); document.getElementById("job-" + id)?.remove();
     } else {
       if (what === "stop" && !confirm("Stop recording? You can resume it later.")) return;
-      await api(`/api/jobs/${id}/${what}`, { method: "POST" });
+      const r = await api(`/api/jobs/${id}/${what}`, { method: "POST" });
+      if (what === "vault") say("Saved to Obsidian at " + r.note);
       if (what === "transcribe" || what === "summarize") open.add(id);
     }
   } catch (err) { say(err.message); }
   await refresh();
-  el && el.scrollIntoView({ block: "nearest" });
 }
 
-function renderTx(el, j) {
-  let tx = $(".tx", el);
-  if (!open.has(j.id) || !(j.has_transcript || j.transcribing)) { tx && tx.remove(); return; }
-  if (!tx) {
-    tx = document.createElement("div");
-    tx.className = "tx";
-    tx.innerHTML = `
+function renderPanel(el, j) {
+  let p = $(".panel", el);
+  if (!open.has(j.id) || !(j.has_transcript || j.transcribing || j.playable)) { p && p.remove(); return; }
+  if (!p) {
+    p = document.createElement("div");
+    p.className = "panel";
+    p.innerHTML = `
+      <div class="row"><div class="gut"></div><div class="txt player"></div></div>
       <section class="sum" hidden></section>
-      <div class="tx-bar">
-        <input type="search" placeholder="Search transcript" aria-label="Search transcript">
-        <button data-copy>Copy text</button>
-        <a class="btn" data-dl="txt">.txt</a>
-        <a class="btn" data-dl="srt">.srt</a>
-      </div>
-      <div class="tx-info"></div>
+      <div class="row tx-tools"><div class="gut"></div><div class="txt">
+        <div class="tools">
+          <input type="search" placeholder="Search this transcript" aria-label="Search this transcript">
+          <button data-copy>Copy text</button>
+          <a class="btn" data-dl="txt">.txt</a><a class="btn" data-dl="srt">.srt</a>
+        </div>
+        <div class="tx-info"></div></div></div>
       <div class="lines"></div>`;
-    $("input", tx).addEventListener("input", () => drawLines(tx, j.id));
-    $("[data-copy]", tx).addEventListener("click", async e => {
+    $("input", p).addEventListener("input", () => drawLines(p, j.id));
+    $("[data-copy]", p).addEventListener("click", async e => {
       e.stopPropagation();
       const segs = txState[j.id]?.segments || [];
       await navigator.clipboard.writeText(segs.map(s => `[${s.t}] ${s.text}`).join("\n"));
       e.target.textContent = "Copied"; setTimeout(() => (e.target.textContent = "Copy text"), 1500);
     });
-    tx.querySelectorAll("[data-dl]").forEach(a => (a.href = `/api/jobs/${j.id}/download/${a.dataset.dl}`));
-    el.appendChild(tx);
+    p.querySelectorAll("[data-dl]").forEach(a => (a.href = `/api/jobs/${j.id}/download/${a.dataset.dl}`));
+    el.appendChild(p);
   }
-  tx.querySelectorAll("[data-dl]").forEach(a => (a.hidden = !j.has_transcript || j.transcribing));
-  loadTx(tx, j);
-  loadSummary(tx, j);
+  if (j.playable && !$("audio", p)) {
+    const a = document.createElement("audio");
+    a.controls = true; a.preload = "metadata"; a.src = `/api/jobs/${j.id}/audio`;
+    a.addEventListener("timeupdate", () => follow(p, j.id, a.currentTime));
+    $(".player", p).appendChild(a);
+  }
+  $(".player", p).closest(".row").hidden = !j.playable;
+  $(".tx-tools", p).hidden = !(j.has_transcript || j.transcribing);
+  p.querySelectorAll("[data-dl]").forEach(a => (a.hidden = !j.has_transcript || j.transcribing));
+  if (j.has_transcript || j.transcribing) loadTx(p, j);
+  loadSummary(p, j);
 }
 
-// A transcript time as a link that opens the video there (YouTube only).
-function timeLink(j, secs, label) {
-  if (secs == null || !/youtube\.com|youtu\.be/.test(j.url || "")) return `<span class="t">${esc(label)}</span>`;
-  return `<a class="t" href="https://www.youtube.com/watch?v=${encodeURIComponent(j.id)}&t=${secs}s" target="_blank" rel="noopener" title="Open the video here">${esc(label)}</a>`;
+async function loadTx(p, j) {
+  const key = j.transcribing ? "live:" + Date.now() : "done:" + j.transcribed_at;
+  if (txState[j.id]?.key === key) return;
+  const data = await api(`/api/jobs/${j.id}/transcript`).catch(() => null);
+  if (!data) return;
+  const lines = $(".lines", p);
+  const atBottom = lines.scrollHeight - lines.scrollTop - lines.clientHeight < 40;
+  txState[j.id] = { segments: data.segments, key };
+  $(".tx-info", p).textContent = j.transcribing
+    ? (data.segments.length ? `${data.segments.length} lines so far, up to ${data.segments.at(-1).t}` : "Starting Whisper. The first run downloads the model, so give it a minute.")
+    : `${data.segments.length} lines`;
+  drawLines(p, j.id);
+  if (j.transcribing && atBottom) lines.scrollTop = lines.scrollHeight;
 }
 
-async function loadSummary(tx, j) {
-  const box = $(".sum", tx);
+function drawLines(p, id) {
+  const q = $("input", p).value.trim();
+  const re = q ? new RegExp("\\b" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
+  const segs = (txState[id]?.segments || []).filter(s => !re || re.test(s.text));
+  const j = jobsById[id] || {};
+  $(".lines", p).innerHTML = segs.length
+    ? segs.map(s => `<div class="row" data-s="${s.s}"><div class="gut">${timeLink(j, s.s, s.t)}</div><div class="txt">${highlight(s.text, q)}</div></div>`).join("")
+    : `<div class="row"><div class="gut"></div><div class="txt working">${q ? "No matches in this transcript." : "Waiting for the first lines…"}</div></div>`;
+  p._now = null;
+}
+
+async function loadSummary(p, j) {
+  const box = $(".sum", p);
   if (!j.summary_at) { box.hidden = true; return; }
   if (box._at === j.summary_at) return;
   const s = await api(`/api/jobs/${j.id}/summary`).catch(() => null);
   if (!s || !s.tldr) return;
   box._at = j.summary_at;
   const stale = j.transcribed_seconds - s.covers_seconds > 120
-    ? `<p class="note">Written when the transcript covered ${clock(s.covers_seconds)}. Update it to include the rest.</p>` : "";
-  box.innerHTML = `
-    <h3>Summary</h3>${stale}
-    <p>${esc(s.tldr)}</p>
-    <h4>Key points</h4>
-    <ol>${s.key_points.map(p => `<li>${timeLink(j, p.s, p.timestamp.replace(/[\[\]\s]/g, ""))}<span>${esc(p.text)}</span></li>`).join("")}</ol>
-    ${s.mentions.length ? `<h4>Mentioned</h4><ul>${s.mentions.map(m => `<li><strong>${esc(m.name)}</strong>: ${esc(m.note)}</li>`).join("")}</ul>` : ""}`;
+    ? `<p class="stale">Written when the transcript covered ${clock(s.covers_seconds)}. Update it to include the rest.</p>` : "";
+  const row = (gut, txt) => `<div class="row"><div class="gut">${gut}</div><div class="txt">${txt}</div></div>`;
+  box.innerHTML =
+    row("", `<h3>Summary</h3>${stale}<p>${esc(s.tldr)}</p><h3>Key points</h3>`) +
+    `<ol>${s.key_points.map(k => `<li>${row(timeLink(j, k.s, k.timestamp.replace(/[\[\]\s]/g, "")), esc(k.text))}</li>`).join("")}</ol>` +
+    (s.mentions.length ? row("", "<h3>Mentioned</h3>") + `<ul>${s.mentions.map(m => `<li>${row("", `<strong>${esc(m.name)}</strong>: ${esc(m.note)}`)}</li>`).join("")}</ul>` : "");
   box.hidden = false;
 }
 
-async function loadTx(tx, j) {
-  const key = j.transcribing ? "live:" + Date.now() : "done:" + j.transcribed_at;
-  if (txState[j.id]?.key === key) return;
-  const data = await api(`/api/jobs/${j.id}/transcript`).catch(() => null);
-  if (!data) return;
-  const lines = $(".lines", tx);
-  const atBottom = lines.scrollHeight - lines.scrollTop - lines.clientHeight < 40;
-  txState[j.id] = { segments: data.segments, key };
-  $(".tx-info", tx).textContent = j.transcribing
-    ? (data.segments.length ? `${data.segments.length} lines so far, up to ${data.segments.at(-1).t}` : "Starting Whisper. The first run downloads the model, so give it a minute.")
-    : `${data.segments.length} lines`;
-  drawLines(tx, j.id);
-  if (j.transcribing && atBottom) lines.scrollTop = lines.scrollHeight;
+// Mark the line being played, so the margin works as a playhead.
+function follow(p, id, t) {
+  const rows = p.querySelectorAll(".lines .row[data-s]");
+  let lo = 0, hi = rows.length - 1, hit = null;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (+rows[mid].dataset.s <= t) { hit = rows[mid]; lo = mid + 1; } else hi = mid - 1; }
+  if (hit === p._now) return;
+  p._now?.classList.remove("now");
+  p._now = hit;
+  if (!hit) return;
+  hit.classList.add("now");
+  const box = $(".lines", p), top = hit.offsetTop - box.offsetTop;
+  if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 60) box.scrollTop = top - box.clientHeight / 3;
 }
 
-function drawLines(tx, id) {
-  const q = $("input", tx).value.trim().toLowerCase();
-  const segs = (txState[id]?.segments || []).filter(s => !q || s.text.toLowerCase().includes(q));
-  const hl = t => {
-    if (!q) return esc(t);
-    const i = t.toLowerCase().indexOf(q);
-    return esc(t.slice(0, i)) + "<mark>" + esc(t.slice(i, i + q.length)) + "</mark>" + esc(t.slice(i + q.length));
-  };
-  const j = document.getElementById("job-" + id)?._job || {};
-  $(".lines", tx).innerHTML = segs.length
-    ? segs.map(s => `<div class="line">${timeLink(j, s.s, s.t)}<span>${hl(s.text)}</span></div>`).join("")
-    : `<div class="working">${q ? "No matches." : "Waiting for the first lines…"}</div>`;
+function seek(id, secs) {
+  const a = $(`#job-${CSS.escape(id)} audio`);
+  if (!a) return false;
+  a.currentTime = secs;
+  a.play().catch(() => {});
+  return true;
 }
+
+// Times in the margin play your copy; cmd-click still opens YouTube.
+document.addEventListener("click", e => {
+  const a = e.target.closest("a.t[data-s]");
+  if (!a || e.metaKey || e.ctrlKey) return;
+  const id = a.closest(".rec")?.id.slice(4);
+  if (id && seek(id, +a.dataset.s)) e.preventDefault();
+});
+
+// Search every transcript
+let searchTimer;
+$("#q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); });
+async function runSearch() {
+  const q = $("#q").value.trim(), box = $("#results");
+  if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
+  const { hits } = await api("/api/search?q=" + encodeURIComponent(q)).catch(() => ({ hits: [] }));
+  if (q !== $("#q").value.trim()) return;
+  const groups = {};
+  hits.forEach(h => (groups[h.id] ||= { title: h.title, hits: [] }).hits.push(h));
+  box.innerHTML = hits.length
+    ? `<div class="row"><div class="gut"></div><div class="txt results-info">${hits.length}${hits.length >= 300 ? "+" : ""} lines in ${Object.keys(groups).length} recording${Object.keys(groups).length > 1 ? "s" : ""}</div></div>` +
+      Object.entries(groups).map(([id, g]) =>
+        `<div class="row"><div class="gut"></div><div class="txt"><h3>${esc(g.title)}</h3></div></div>` +
+        g.hits.map(h => `<div class="row" data-id="${esc(id)}" data-s="${h.s}" tabindex="0" role="button"><div class="gut"><span class="t">${esc(h.t)}</span></div><div class="txt">${highlight(h.text, q)}</div></div>`).join("")
+      ).join("")
+    : `<div class="row"><div class="gut"></div><div class="txt results-info">No lines match “${esc(q)}”.</div></div>`;
+  box.hidden = false;
+}
+const jumpFromResult = async row => {
+  const id = row.dataset.id, secs = +row.dataset.s;
+  open.add(id);
+  await refresh(true);
+  const p = $(`#job-${CSS.escape(id)} .panel`);
+  if (!p) return;
+  $("input", p).value = ""; drawLines(p, id);
+  const line = [...p.querySelectorAll(".lines .row[data-s]")].find(r => +r.dataset.s >= secs);
+  seek(id, secs);
+  if (line) {
+    const box = $(".lines", p);
+    box.scrollTop = line.offsetTop - box.offsetTop - box.clientHeight / 3;
+    line.classList.add("flash"); setTimeout(() => line.classList.remove("flash"), 2200);
+  }
+  p.closest(".rec").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+};
+$("#results").addEventListener("click", e => { const r = e.target.closest(".row[data-id]"); if (r) jumpFromResult(r); });
+$("#results").addEventListener("keydown", e => { const r = e.target.closest(".row[data-id]"); if (r && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); jumpFromResult(r); } });
 
 let busy = false;
-async function refresh() {
-  if (busy) return; busy = true;
+async function refresh(force) {
+  if (busy && !force) return; busy = true;
   try {
-    const { jobs } = await api("/api/jobs");
+    const { jobs, used_bytes, free_bytes } = await api("/api/jobs");
+    const live = jobs.filter(j => j.state === "recording").length;
+    $("#onair").hidden = !live;
+    $("#onair").textContent = live === 1 ? "Recording" : `Recording ${live} streams`;
+    $("#disk").textContent = `${size(used_bytes)} of recordings, ${size(free_bytes)} free`;
     const list = $("#jobs");
-    if (!jobs.length) list.innerHTML = `<div class="empty">Paste a stream link above to start your first recording.</div>`;
+    if (!jobs.length) list.innerHTML = `<div class="empty">No recordings yet. Paste a stream link above to start one.</div>`;
     else {
       list.querySelector(".empty")?.remove();
       jobs.forEach((j, i) => {
+        jobsById[j.id] = j;
         const el = card(j);
         if (list.children[i] !== el) list.insertBefore(el, list.children[i] || null);
-        renderTx(el, j);
+        renderPanel(el, j);
       });
+      [...list.querySelectorAll(".rec")].forEach(el => { if (!jobs.some(j => "job-" + j.id === el.id)) el.remove(); });
     }
   } catch (err) { say("Can't reach the app. Is app.py still running?"); }
   busy = false;

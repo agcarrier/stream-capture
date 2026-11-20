@@ -20,6 +20,8 @@ Optional phone pings: put an ntfy topic name in `~/.config/stream-capture/ntfy_t
 
 Summaries: put an OpenAI API key in `~/.config/stream-capture/openai_key` (chmod 600). Summaries use `gpt-6.1-terra` through the Responses API (override with `SUMMARY_MODEL`), run on their own when a stream ends, and can be run by hand with the Summarize button. A 4-hour stream costs about 10 cents.
 
+Each recording has a player for your own copy (times in the margin jump to that moment), a search across every transcript, Delete, and Save to Obsidian. That writes a `source` note to the vault's `raw/` once (set `VAULT_DIR` to change where), and happens on its own after a stream's automatic summary. Once a stream is over, a leftover `.part` file is turned into a normal audio file.
+
 The app asks for that password and remembers you for 30 days. Changing the file signs every browser out after a restart.
 
 ## Run
