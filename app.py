@@ -271,6 +271,20 @@ def stop_recording(jid):
         os.kill(meta["pid"], signal.SIGINT)
 
 
+def find_loop(segs, after=0, min_run=8, min_secs=30):
+    """Index where Whisper got stuck repeating one line (8+ in a row over 30s+), or None."""
+    i = after
+    while i < len(segs):
+        j = i
+        text = segs[i]["text"].strip().lower()
+        while j + 1 < len(segs) and segs[j + 1]["text"].strip().lower() == text:
+            j += 1
+        if j - i + 1 >= min_run and segs[j]["end"] - segs[i]["start"] >= min_secs:
+            return i
+        i = j + 1
+    return None
+
+
 def start_transcription(jid, then_summarize=False):
     d = job_dir(jid)
     final, part = audio_files(d)
@@ -283,30 +297,44 @@ def start_transcription(jid, then_summarize=False):
 
     def run():
         # Only the new audio gets transcribed. The last old line is redone, since it may have
-        # been cut off mid-sentence when the previous snapshot was taken.
+        # been cut off mid-sentence when the previous snapshot was taken. A Whisper loop already
+        # in the transcript is cut out and redone too.
         old = load_segments(d)
-        cut = old[-1]["start"] if old else 0.0
-        keep = old[:-1]
+        k = find_loop(old)
+        k = len(old) - 1 if k is None else k
         snap = d / "snapshot.wav"
         chunk = d / "chunk.json"
         title = read_meta(d).get("title") or jid
         try:
-            live[jid] = (cut, keep)
-            # Decode from the cut point into a temp wav; the recorder can keep writing the .part.
-            subprocess.run([FFMPEG, "-v", "error", "-y", "-ss", "%.3f" % cut, "-i", str(final or part),
-                            "-vn", "-ac", "1", "-ar", "16000", str(snap)], check=True)
-            new_len = duration(snap) or 0
-            if new_len > 1:
+            segs = old
+            for attempt in range(3):  # first pass plus up to two loop repairs
+                cut = segs[k]["start"] if segs else 0.0
+                keep = segs[:k]
+                live[jid] = (cut, keep)
+                # Decode from the cut point into a temp wav; the recorder can keep writing the .part.
+                subprocess.run([FFMPEG, "-v", "error", "-y", "-ss", "%.3f" % cut, "-i", str(final or part),
+                                "-vn", "-ac", "1", "-ar", "16000", str(snap)], check=True)
+                new_len = duration(snap) or 0
+                if new_len <= 1:
+                    break
                 with open(d / "transcribe.log", "w") as log:
                     code = subprocess.call(
                         [WHISPER, str(snap), "--model", MODEL, "--output-dir", str(d),
-                         "--output-name", "chunk", "--output-format", "json"],
+                         "--output-name", "chunk", "--output-format", "json",
+                         # Feeding each window the previous text is what lets one misheard
+                         # "Yeah." snowball into thousands of them.
+                         "--condition-on-previous-text", "False"],
                         stdout=log, stderr=subprocess.STDOUT, env={**os.environ, "PYTHONUNBUFFERED": "1"})
                 if code != 0:
                     raise RuntimeError((tail(d / "transcribe.log", 1) or ["Transcription failed"])[0])
                 new = [{"start": s["start"] + cut, "end": s["end"] + cut, "text": s["text"].strip()}
                        for s in json.loads(chunk.read_text())["segments"] if s["text"].strip()]
-                write_transcript(d, keep + new if new else old)
+                segs = keep + new if new else segs
+                write_transcript(d, segs)
+                k = find_loop(segs, after=len(keep))
+                if k is None or segs[k]["start"] <= cut + 1:
+                    break  # clean, or a loop right at the cut that a retry wouldn't fix
+                print("whisper loop at %s in %s, retrying from there" % (hms(segs[k]["start"]), jid))
             meta = read_meta(d)
             meta.update(transcribed_seconds=cut + new_len, transcribed_at=time.time(), transcribe_error=None)
             write_meta(d, meta)
