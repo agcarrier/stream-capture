@@ -99,7 +99,19 @@
   .stale { color: var(--warn); font: 13.5px/1.5 var(--sans); }
   a.t, span.t { color: var(--muted); text-decoration: none; font: 13px/2.05 var(--sans); }
   a.t:hover { color: var(--link); text-decoration: underline; }
-  .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 6px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 6px; }
+  /* Summary | Transcript: underlined tabs, like section marks in a script */
+  .tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-top: 14px; }
+  .tabs button { border: 0; border-radius: 0; padding: 10px 0 9px; font: 600 15px/1 var(--sans); color: var(--muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs button:hover:not(:disabled) { color: var(--ink); border-color: transparent transparent var(--margin-rule); }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .tabs .count { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 4px; }
+  .check { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; cursor: pointer; }
+  .check input { accent-color: var(--ink); margin: 0; }
+  button.copy { min-width: 9.5em; justify-content: center; }
+  .tldr { font-size: 17.5px; margin-top: 4px !important; }
+  .empty-note { color: var(--muted); margin: 8px 0 10px !important; }
   .tools input { flex: 1 1 200px; padding: 8px 11px; font-size: 14px; }
   .tx-info { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
   .lines { max-height: 62vh; overflow-y: auto; font: 16.5px/1.65 var(--serif); padding-bottom: 8px; overscroll-behavior: contain; }
@@ -233,7 +245,8 @@ function headHTML(j) {
     acts.push(`<button data-act="toggle">${open.has(j.id) ? "Close" : j.has_transcript ? "Open transcript" : "Open player"}</button>`);
   if (!j.has_transcript || j.transcribing || behind > 5 || j.state === "recording")
     acts.push(`<button data-act="transcribe" ${!can || !j.captured_seconds ? "disabled" : ""}>${j.transcribing ? "Transcribing…" : j.has_transcript ? "Update transcript" : "Transcribe"}</button>`);
-  const sumBehind = j.summary_at && j.summary_covers != null && j.transcribed_seconds - j.summary_covers > 120;
+  // the transcript changed after the summary was written: it grew, or a loop was repaired
+  const sumBehind = j.summary_at && j.transcribed_at && j.transcribed_at - j.summary_at > 5;
   if (j.has_transcript && (!j.summary_at || j.summarizing || sumBehind || j.summary_error))
     acts.push(`<button data-act="summarize" ${!can ? "disabled" : ""}>${j.summarizing ? "Summarizing…" : j.summary_at ? "Update summary" : "Summarize"}</button>`);
   if (j.state === "recording") acts.push(`<button data-act="stop">Stop recording</button>`);
@@ -298,22 +311,40 @@ function renderPanel(el, j) {
     p.className = "panel";
     p.innerHTML = `
       <div class="row"><div class="gut"></div><div class="txt player"></div></div>
-      <section class="sum" hidden></section>
-      <div class="row tx-tools"><div class="gut"></div><div class="txt">
-        <div class="tools">
-          <input type="search" placeholder="Search this transcript" aria-label="Search this transcript">
-          <button data-copy>Copy text</button>
-          <a class="btn" data-dl="txt">.txt</a><a class="btn" data-dl="srt">.srt</a>
-        </div>
-        <div class="tx-info"></div></div></div>
-      <div class="lines"></div>`;
-    $("input", p).addEventListener("input", () => drawLines(p, j.id));
-    $("[data-copy]", p).addEventListener("click", async e => {
-      e.stopPropagation();
-      const segs = txState[j.id]?.segments || [];
-      await navigator.clipboard.writeText(segs.map(s => `[${s.t}] ${s.text}`).join("\n"));
-      e.target.textContent = "Copied"; setTimeout(() => (e.target.textContent = "Copy text"), 1500);
+      <div class="row tabs-row"><div class="gut"></div><div class="txt">
+        <div class="tabs" role="tablist" aria-label="View">
+          <button role="tab" data-tab="summary" id="tab-sum-${esc(j.id)}" aria-controls="pane-sum-${esc(j.id)}">Summary</button>
+          <button role="tab" data-tab="transcript" id="tab-tx-${esc(j.id)}" aria-controls="pane-tx-${esc(j.id)}">Transcript <span class="count"></span></button>
+        </div></div></div>
+      <section class="pane" data-pane="summary" role="tabpanel" id="pane-sum-${esc(j.id)}" aria-labelledby="tab-sum-${esc(j.id)}">
+        <div class="row"><div class="gut"></div><div class="txt"><div class="tools">
+          <button data-copy="summary" class="copy">Copy summary</button>
+        </div></div></div>
+        <div class="sum"></div>
+      </section>
+      <section class="pane" data-pane="transcript" role="tabpanel" id="pane-tx-${esc(j.id)}" aria-labelledby="tab-tx-${esc(j.id)}">
+        <div class="row"><div class="gut"></div><div class="txt">
+          <div class="tools">
+            <input type="search" placeholder="Search this transcript" aria-label="Search this transcript">
+            <button data-copy="transcript" class="copy">Copy transcript</button>
+            <label class="check"><input type="checkbox" data-times checked> With times</label>
+            <a class="btn" data-dl="txt">.txt</a><a class="btn" data-dl="srt">.srt</a>
+          </div>
+          <div class="tx-info"></div></div></div>
+        <div class="lines"></div>
+      </section>`;
+    $("input[type=search]", p).addEventListener("input", () => drawLines(p, j.id));
+    p.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(p, j.id, b.dataset.tab)));
+    $(".tabs", p).addEventListener("keydown", e => {  // arrow keys move between the two tabs
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const next = tabOf[j.id] === "summary" ? "transcript" : "summary";
+      showTab(p, j.id, next); $(`[data-tab=${next}]`, p).focus();
     });
+    p.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const jj = jobsById[j.id] || j;
+      copyText(b, b.dataset.copy === "summary" ? summaryText(jj, p._summary) : transcriptText(j.id, $("[data-times]", p).checked));
+    }));
     p.querySelectorAll("[data-dl]").forEach(a => (a.href = `/api/jobs/${j.id}/download/${a.dataset.dl}`));
     el.appendChild(p);
   }
@@ -324,10 +355,50 @@ function renderPanel(el, j) {
     $(".player", p).appendChild(a);
   }
   $(".player", p).closest(".row").hidden = !j.playable;
-  $(".tx-tools", p).hidden = !(j.has_transcript || j.transcribing);
+  const hasText = j.has_transcript || j.transcribing;
+  $(".tabs-row", p).hidden = !hasText;
   p.querySelectorAll("[data-dl]").forEach(a => (a.hidden = !j.has_transcript || j.transcribing));
-  if (j.has_transcript || j.transcribing) loadTx(p, j);
+  $("[data-copy=transcript]", p).disabled = !j.has_transcript || j.transcribing;
+  showTab(p, j.id, tabOf[j.id] || (j.summary_at ? "summary" : "transcript"), !hasText);
+  if (hasText) loadTx(p, j);
   loadSummary(p, j);
+}
+
+const tabOf = {};  // id -> "summary" | "transcript", remembered while the page is open
+function showTab(p, id, tab, none) {
+  tabOf[id] = tab;
+  p.querySelectorAll("[data-tab]").forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1;
+  });
+  p.querySelectorAll("[data-pane]").forEach(s => (s.hidden = none || s.dataset.pane !== tab));
+}
+
+function summaryText(j, s) {
+  if (!s) return "";
+  return [j.title, "", s.tldr, "", "Key points", ...s.key_points.map(k => `- ${k.timestamp.replace(/[\[\]\s]/g, "")} ${k.text}`),
+    ...(s.mentions.length ? ["", "Mentioned", ...s.mentions.map(m => `- ${m.name}: ${m.note}`)] : [])].join("\n");
+}
+
+function transcriptText(id, withTimes) {
+  return (txState[id]?.segments || []).map(s => (withTimes ? `[${s.t}] ` : "") + s.text).join("\n");
+}
+
+async function copyText(btn, text) {
+  const label = btn.textContent;
+  const legacy = () => {  // for plain http, or when the clipboard API refuses
+    const t = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
+    t.style.cssText = "position:fixed;opacity:0";
+    document.body.append(t); t.select();
+    const ok = document.execCommand("copy"); t.remove();
+    if (!ok) throw new Error("copy refused");
+  };
+  try {
+    if (!text) throw new Error("empty");
+    try { await navigator.clipboard.writeText(text); } catch { legacy(); }
+    btn.textContent = "Copied";
+  } catch { btn.textContent = "Couldn't copy"; }
+  setTimeout(() => (btn.textContent = label), 1600);
 }
 
 async function loadTx(p, j) {
@@ -338,15 +409,16 @@ async function loadTx(p, j) {
   const lines = $(".lines", p);
   const atBottom = lines.scrollHeight - lines.scrollTop - lines.clientHeight < 40;
   txState[j.id] = { segments: data.segments, key };
+  $(".tabs .count", p).textContent = data.segments.length ? data.segments.length.toLocaleString() + " lines" : "";
   $(".tx-info", p).textContent = j.transcribing
     ? (data.segments.length ? `${data.segments.length} lines so far, up to ${data.segments.at(-1).t}` : "Starting Whisper. The first run downloads the model, so give it a minute.")
-    : `${data.segments.length} lines`;
+    : "";
   drawLines(p, j.id);
   if (j.transcribing && atBottom) lines.scrollTop = lines.scrollHeight;
 }
 
 function drawLines(p, id) {
-  const q = $("input", p).value.trim();
+  const q = $("input[type=search]", p).value.trim();
   const re = q ? new RegExp("\\b" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
   const segs = (txState[id]?.segments || []).filter(s => !re || re.test(s.text));
   const j = jobsById[id] || {};
@@ -358,19 +430,28 @@ function drawLines(p, id) {
 
 async function loadSummary(p, j) {
   const box = $(".sum", p);
-  if (!j.summary_at) { box.hidden = true; return; }
-  if (box._at === j.summary_at) return;
+  const row = (gut, txt) => `<div class="row"><div class="gut">${gut}</div><div class="txt">${txt}</div></div>`;
+  $("[data-copy=summary]", p).disabled = !j.summary_at;
+  if (!j.summary_at) {
+    const state = j.summarizing ? "summarizing" : j.summary_error ? "error" : "none";
+    if (box._at === state) return;
+    box._at = state; p._summary = null;
+    box.innerHTML = row("", state === "summarizing"
+      ? `<p class="empty-note">Writing the summary. It takes about half a minute.</p>`
+      : `<p class="empty-note">${state === "error" ? "The last summary failed. Try again." : "No summary yet."}</p>
+         <button data-act="summarize" ${j.transcribing ? "disabled" : ""}>Summarize</button>`);
+    return;
+  }
+  if (box._at === j.summary_at + ":" + j.transcribed_at) return;
   const s = await api(`/api/jobs/${j.id}/summary`).catch(() => null);
   if (!s || !s.tldr) return;
-  box._at = j.summary_at;
-  const stale = j.transcribed_seconds - s.covers_seconds > 120
-    ? `<p class="stale">Written when the transcript covered ${clock(s.covers_seconds)}. Update it to include the rest.</p>` : "";
-  const row = (gut, txt) => `<div class="row"><div class="gut">${gut}</div><div class="txt">${txt}</div></div>`;
+  box._at = j.summary_at + ":" + j.transcribed_at; p._summary = s;
+  const stale = j.transcribed_at - j.summary_at > 5
+    ? `<p class="stale">The transcript changed after this summary was written. Use Update summary to refresh it.</p>` : "";
   box.innerHTML =
-    row("", `<h3>Summary</h3>${stale}<p>${esc(s.tldr)}</p><h3>Key points</h3>`) +
+    row("", `${stale}<p class="tldr">${esc(s.tldr)}</p><h3>Key points</h3>`) +
     `<ol>${s.key_points.map(k => `<li>${row(timeLink(j, k.s, k.timestamp.replace(/[\[\]\s]/g, "")), esc(k.text))}</li>`).join("")}</ol>` +
     (s.mentions.length ? row("", "<h3>Mentioned</h3>") + `<ul>${s.mentions.map(m => `<li>${row("", `<strong>${esc(m.name)}</strong>: ${esc(m.note)}`)}</li>`).join("")}</ul>` : "");
-  box.hidden = false;
 }
 
 // Mark the line being played, so the margin works as a playhead.
@@ -428,7 +509,8 @@ const jumpFromResult = async row => {
   await refresh(true);
   const p = $(`#job-${CSS.escape(id)} .panel`);
   if (!p) return;
-  $("input", p).value = ""; drawLines(p, id);
+  showTab(p, id, "transcript");
+  $("input[type=search]", p).value = ""; drawLines(p, id);
   const line = [...p.querySelectorAll(".lines .row[data-s]")].find(r => +r.dataset.s >= secs);
   seek(id, secs);
   if (line) {
