@@ -77,7 +77,7 @@ ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SEG_RE = re.compile(r"^\[((?:\d+:)?\d+:\d+)\.\d+ --> [^\]]+\]\s*(.*)$")
 
 NTFY_FILE = PASSWORD_FILE.parent / "ntfy_topic"  # optional; no file, no phone pings
-PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://capture.andrewcarrier.dev")
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://uncut.andrewcarrier.dev")
 
 KEY_FILE = PASSWORD_FILE.parent / "openai_key"  # or OPENAI_API_KEY in the environment
 SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", "gpt-6.1-terra")
@@ -683,6 +683,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send(401, (LOGIN_PAGE % '<p class="err">Wrong password.</p>').encode(), "text/html; charset=utf-8")
 
     def route(self, method):
+        if (self.headers.get("Host") or "").split(":")[0] == "capture.andrewcarrier.dev":  # the old address
+            return self.send(301, b"", "text/plain", {"Location": PUBLIC_URL + self.path})
         parts = [p for p in self.path.split("?")[0].split("/") if p]
         if parts == ["login"]:
             return self.login(method)
