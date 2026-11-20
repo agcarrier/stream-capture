@@ -18,7 +18,7 @@ chmod 600 ~/.config/stream-capture/password
 
 Optional phone pings: put an ntfy topic name in `~/.config/stream-capture/ntfy_topic` and subscribe to it in the ntfy app. You get a ping when a transcript finishes or fails.
 
-Summaries: put an Anthropic API key in `~/.config/stream-capture/anthropic_key` (chmod 600). Summaries use `claude-opus-5-5` (override with `SUMMARY_MODEL`), run on their own when a stream ends, and can be run by hand with the Summarize button. A 4-hour stream costs about 40 cents.
+Summaries: put an OpenAI API key in `~/.config/stream-capture/openai_key` (chmod 600). Summaries use `gpt-6.1-terra` through the Responses API (override with `SUMMARY_MODEL`), run on their own when a stream ends, and can be run by hand with the Summarize button. A 4-hour stream costs about 10 cents.
 
 The app asks for that password and remembers you for 30 days. Changing the file signs every browser out after a restart.
 
